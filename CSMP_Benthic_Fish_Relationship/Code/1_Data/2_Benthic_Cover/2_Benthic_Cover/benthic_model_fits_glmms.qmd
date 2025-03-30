@@ -1,0 +1,425 @@
+---
+title: "benthic_model_fits_glmms"
+format: html
+editor: visual
+---
+
+# CORAL
+
+## def formula
+
+```{r}
+coral_form_glm <- bf(prop_hc ~ Depth +
+                   (1 | Site_recode),
+                 family = zero_inflated_beta())
+```
+
+## get prio
+
+```{r}
+get_prior(coral_form_glm, data = benthic_v2)
+```
+
+## def prior
+
+```{r}
+coral_prior_glm <- prior(normal(2.2, 1.7), class = "Intercept") +
+  prior(normal(0, 1.3), class = "b") +
+  #prior(student_t(3, 0 , 1.7), class = "sds") +
+  prior(student_t(3, 0, 1.7), class = "sd") +
+  prior(gamma(0.01, 0.01), class = "phi") +
+  prior(beta(1,1), class = "zi")
+```
+
+## fit full model
+
+```{r}
+#| cache: TRUE
+coral_mod_glm <- brm(coral_form_glm,
+                data = benthic_v2,
+                prior = coral_prior_glm,
+                sample_prior = "yes",
+                iter = 10000,
+                warmup = 2000,
+                chains = 3, 
+                cores = 6,
+                thin = 5, 
+                control = list(adapt_delta = 0.99,
+                                 max_treedepth = 20),
+                refresh = 0)
+```
+
+### MCMC diagnostics
+
+```{r}
+coral_mod_glm |> mcmc_plot(type = "trace")
+coral_mod_glm |> mcmc_plot(type = "acf_bar")
+coral_mod_glm |> mcmc_plot(type = "rhat_hist")
+coral_mod_glm |> mcmc_plot(type = "neff_hist")
+```
+
+### residuals
+
+```{r}
+coral_resids_glm <- make_brms_dharma_res(coral_mod_glm)
+
+# qqplot
+coral_resids_glm |> testUniformity()
+coral_resids_glm |> plotResiduals(quantreg = FALSE)
+```
+
+# MACROALGAE
+
+## def formula
+
+```{r}
+ma_form_glm <- bf(prop_ma ~ Depth +
+                   (1 | Site_recode),
+                 family = zero_inflated_beta())
+```
+
+## def prior
+
+```{r}
+ma_prior_glm <- prior(normal(1.8, 1.4), class = "Intercept") +
+  prior(normal(0, 1.3), class = "b") +
+  #prior(student_t(3, 0 , 1.4), class = "sds") +
+  prior(student_t(3, 0, 1.4), class = "sd") +
+  prior(gamma(0.01, 0.01), class = "phi") +
+  prior(beta(1,1), class = "zi")
+```
+
+## fit full model
+
+```{r}
+#| cache: TRUE
+ma_mod_glm <- brm(ma_form_glm,
+                data = benthic_v2,
+                prior = ma_prior_glm,
+                sample_prior = "yes",
+                iter = 10000,
+                warmup = 2000,
+                chains = 3, 
+                cores = 6,
+                thin = 5, 
+                control = list(adapt_delta = 0.99,
+                                 max_treedepth = 20),
+                refresh = 0)
+```
+
+### MCMC diagnostics
+
+```{r}
+ma_mod_glm |> mcmc_plot(type = "trace")
+ma_mod_glm |> mcmc_plot(type = "acf_bar")
+ma_mod_glm |> mcmc_plot(type = "rhat_hist")
+ma_mod_glm |> mcmc_plot(type = "neff_hist")
+```
+
+### residuals
+
+```{r}
+ma_resids_glm <- make_brms_dharma_res(ma_mod_glm)
+
+# qqplot
+ma_resids_glm |> testUniformity()
+ma_resids_glm |> plotResiduals(quantreg = FALSE)
+```
+
+- residuals could be better
+
+# TURF ALGAE
+
+## def formula
+
+```{r}
+ta_form_glm <- bf(prop_ta ~ Depth +
+                   (1 | Site_recode),
+                 family = zero_inflated_beta())
+```
+
+## def prior
+
+```{r}
+ta_prior_glm <- prior(normal(2.6, 2.2), class = "Intercept") +
+  prior(normal(0, 1.2), class = "b") +
+  #prior(student_t(3, 0 , 2.2), class = "sds") +
+  prior(student_t(3, 0, 2.2), class = "sd") +
+  prior(gamma(0.01, 0.01), class = "phi") +
+  prior(beta(1,1), class = "zi")
+```
+
+## fit full model
+
+```{r}
+#| cache: TRUE
+ta_mod_glm <- brm(ta_form_glm,
+                data = benthic_v2,
+                prior = ta_prior_glm,
+                sample_prior = "yes",
+                iter = 10000,
+                warmup = 2000,
+                chains = 3, 
+                cores = 6,
+                thin = 5, 
+                control = list(adapt_delta = 0.99,
+                                 max_treedepth = 20),
+                refresh = 0)
+```
+
+### MCMC diagnostics
+
+```{r}
+ta_mod_glm |> mcmc_plot(type = "trace")
+ta_mod_glm |> mcmc_plot(type = "acf_bar")
+ta_mod_glm |> mcmc_plot(type = "rhat_hist")
+ta_mod_glm |> mcmc_plot(type = "neff_hist")
+```
+
+### residuals
+
+```{r}
+ta_resids_glm <- make_brms_dharma_res(ta_mod_glm)
+
+# qqplot
+ta_resids_glm |> testUniformity()
+ta_resids_glm |> plotResiduals(quantreg = FALSE)
+```
+
+# OCTOCORAL
+
+## def formula
+
+```{r}
+oct_form_glm <- bf(prop_oct ~ Depth +
+                   (1 | Site_recode),
+                 family = zero_inflated_beta())
+```
+
+## def prior
+
+```{r}
+oct_prior_glm <- prior(normal(2.5, 2), class = "Intercept") +
+  prior(normal(0, 1.2), class = "b") +
+  #prior(student_t(3, 0 , 2), class = "sds") +
+  prior(student_t(3, 0, 2), class = "sd") +
+  prior(gamma(0.01, 0.01), class = "phi") +
+  prior(beta(1,1), class = "zi")
+```
+
+## fit full model
+
+```{r}
+#| cache: TRUE
+oct_mod_glm <- brm(oct_form_glm,
+                data = benthic_v2,
+                prior = oct_prior_glm,
+                sample_prior = "yes",
+                iter = 10000,
+                warmup = 2000,
+                chains = 3, 
+                cores = 6,
+                thin = 5, 
+                control = list(adapt_delta = 0.99,
+                                 max_treedepth = 20),
+                refresh = 0)
+```
+
+### MCMC diagnostics
+
+```{r}
+oct_mod_glm |> mcmc_plot(type = "trace")
+oct_mod_glm |> mcmc_plot(type = "acf_bar")
+oct_mod_glm |> mcmc_plot(type = "rhat_hist")
+oct_mod_glm |> mcmc_plot(type = "neff_hist")
+```
+
+### residuals
+
+```{r}
+oct_resids_glm <- make_brms_dharma_res(oct_mod_glm)
+
+oct_resids_glm |> testUniformity()
+oct_resids_glm |> plotResiduals(quantreg = FALSE)
+```
+
+- residuals could be better
+
+# ROCK
+
+rock
+
+## def formula
+
+```{r}
+rock_form_glm <- bf(prop_rock ~ Depth +
+                   (1 | Site_recode),
+                 family = zero_inflated_beta())
+```
+
+## def prior
+
+```{r}
+rock_prior_glm <- prior(normal(3, 2.5), class = "Intercept") +
+  prior(normal(0, 1.2), class = "b") +
+  #prior(student_t(3, 0 , 2.5), class = "sds") +
+  prior(student_t(3, 0, 2.5), class = "sd") +
+  prior(gamma(0.01, 0.01), class = "phi") +
+  prior(beta(1,1), class = "zi")
+```
+
+## fit full model
+
+```{r}
+#| cache: TRUE
+rock_mod_glm <- brm(rock_form_glm,
+                data = benthic_v2,
+                prior = rock_prior_glm,
+                sample_prior = "yes",
+                iter = 10000,
+                warmup = 2000,
+                chains = 3, 
+                cores = 6,
+                thin = 5, 
+                control = list(adapt_delta = 0.99,
+                                 max_treedepth = 20),
+                refresh = 0)
+```
+
+### MCMC diagnostics
+
+```{r}
+rock_mod_glm |> mcmc_plot(type = "trace")
+rock_mod_glm |> mcmc_plot(type = "acf_bar")
+rock_mod_glm |> mcmc_plot(type = "rhat_hist")
+rock_mod_glm |> mcmc_plot(type = "neff_hist")
+```
+
+### residuals
+
+```{r}
+rock_resids_glm <- make_brms_dharma_res(rock_mod_glm)
+
+rock_resids_glm |> testUniformity()
+rock_resids_glm |> plotResiduals(quantreg = FALSE)
+```
+
+# UNCONSOLIDATED SUBSTRATE
+
+## def formula
+
+```{r}
+us_form_glm <- bf(prop_us ~ Depth +
+                   (1 | Site_recode),
+                 family = zero_one_inflated_beta())
+```
+
+## def prior
+
+```{r}
+us_prior_glm <- prior(normal(1.9, 1.4), class = "Intercept") +
+  prior(normal(0, 1.3), class = "b") +
+  #prior(student_t(3, 0 , 1.4), class = "sds") +
+  prior(student_t(3, 0, 1.4), class = "sd") +
+  prior(gamma(0.01, 0.01), class = "phi") +
+  prior(beta(1, 1), class = "coi") +
+  prior(beta(1, 1), class = "zoi")
+```
+
+## fit full model
+
+```{r}
+#| cache: TRUE
+us_mod_glm <- brm(us_form_glm,
+                data = benthic_v2,
+                prior = us_prior_glm,
+                sample_prior = "yes",
+                iter = 10000,
+                warmup = 2000,
+                chains = 3, 
+                cores = 6,
+                thin = 5, 
+                control = list(adapt_delta = 0.99,
+                                 max_treedepth = 20),
+                refresh = 0)
+```
+
+### MCMC diagnostics
+
+```{r}
+us_mod_glm |> mcmc_plot(type = "trace")
+us_mod_glm |> mcmc_plot(type = "acf_bar")
+us_mod_glm |> mcmc_plot(type = "rhat_hist")
+us_mod_glm |> mcmc_plot(type = "neff_hist")
+```
+
+### residuals
+
+```{r}
+us_resids_glm <- make_brms_dharma_res(us_mod_glm)
+
+us_resids_glm |> testUniformity()
+us_resids_glm |> plotResiduals(quantreg = FALSE)
+```
+
+# LOO COMPARE
+
+- understanding loo compare:
+  - greater loo (elpd diff) is the best model
+  - however, if (se > elpd diff) then choose this model
+- all "mod" = GAMMS
+- all "mod_glm" = GLMMS
+
+# coral
+
+```{r}
+loo_compare(brms::loo(coral_mod),
+            brms::loo(coral_mod_glm)) # this model is better
+``` 
+
+- GLMM better
+
+# macroalgae
+
+```{r}
+loo_compare(brms::loo(ma_mod), # this model is better
+            brms::loo(ma_mod_glm)) 
+``` 
+
+- GAMM better
+
+# turf algae
+
+```{r}
+loo_compare(brms::loo(ta_mod), 
+            brms::loo(ta_mod_glm)) # this model is better 
+``` 
+
+- GLMM better
+
+# octocoral
+
+```{r}
+loo_compare(brms::loo(oct_mod), 
+            brms::loo(oct_mod_glm)) # this model is better 
+``` 
+
+- GLMM better
+
+# rock
+
+```{r}
+loo_compare(brms::loo(rock_mod), 
+            brms::loo(rock_mod_glm)) # this model is better 
+``` 
+
+- GLMM better
+
+# unconsolidated substrate
+
+```{r}
+loo_compare(brms::loo(us_mod), 
+            brms::loo(us_mod_glm)) # this model is better 
+``` 
+
+-GLMM better
