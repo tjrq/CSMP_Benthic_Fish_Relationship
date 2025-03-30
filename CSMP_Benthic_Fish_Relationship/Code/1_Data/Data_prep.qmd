@@ -1,0 +1,331 @@
+---
+title: "Data_prep"
+format: html
+editor: visual
+---
+
+# load library
+
+```{r}
+#| label: libraries
+#| output: false
+#| eval: true
+#| warning: false
+#| message: false
+#| cache: false
+
+library(tidyverse)
+library(rstanarm)
+library(brms)
+library(coda)
+library(bayesplot)
+library(DHARMa)
+library(emmeans)
+library(broom)
+library(tidybayes)
+library(ggeffects)
+library(broom.mixed)
+library(bayestestR)
+library(see)
+library(easystats)
+library(patchwork)
+library(ggridges)
+#source("helperFunctions.R")
+library(ggimage)
+library(iNEXT)
+```
+
+# read csv
+
+## benthic file
+
+```{r}
+benthic_master <- read_csv("Data/ROV_Relief_Slope_UPDATED.csv",
+                           trim_ws = TRUE)
+
+glimpse(benthic_master)
+```
+### find site names
+
+- Site names in the benthic file will dictate what sites to include in the fish file
+
+declare site as factor
+
+```{r}
+benthic_master <- 
+  benthic_master |> 
+  mutate(Site = factor(Site),
+         Survey = factor(Survey))
+```
+
+check levels of site
+
+```{r}
+benthic_sites <-
+benthic_master |> 
+  with(unique(Site)) |> 
+  as.tibble() |> 
+  rename(Benthic_site_names = value)
+```
+
+unique for survey
+
+```{r}
+benthic_surveys <-
+benthic_master |> 
+  with(unique(Survey)) |> 
+  as.tibble() |> 
+  rename(Benthic_survey = value)
+```
+
+## fish file
+
+```{r}
+fish_master <- read_csv("Data/master_ROV_fish_Tim_2.csv",
+                        trim_ws = TRUE)
+
+#glimpse(fish_master)
+```
+
+declare site as factors
+
+```{r}
+fish_master <-
+  fish_master |> 
+  mutate(Site = factor(Site),
+         Reef_1 = factor(Reef_1),
+         Reef_2 = factor(Reef_2))
+```
+
+### check levels of survey
+
+```{r}
+fish_survey <-
+fish_master |> 
+  with(unique(Survey)) |> 
+  as.tibble() |> 
+  rename(Fish_survey = value)
+```
+
+- filter survey datas Feb_21, Jul_21, Feb_22
+
+- filter only these dates as these dates had benthic surveys
+
+```{r}
+fish_master_v2 <- 
+  fish_master |> 
+  filter(Survey == "Feb_21" |
+           Survey == "Jul_21" |
+           Survey == "Feb_22")
+```
+
+### check levels of site
+
+```{r}
+fish_sites <-
+fish_master_v2 |> 
+  with(unique(Site)) |> 
+  as.tibble() |> 
+  rename(Fish_site_names = value)
+```
+
+# check site names manually
+
+- problematic sites in benthic_master
+  - Lihou_N1,
+  - Lihou_S1,
+  - Lihou_S2
+
+```{r}
+benthic_master |> 
+  filter(Site == "Edna_2")
+```
+names for Lihou
+
+```{r}
+fish_master_v2 |> 
+  filter(Reef_1 == "Lihou") |> 
+  with(unique(Reef_2))
+```
+
+```{r}
+fish_master_v2 |> 
+  filter(Site == "CHIL-01") 
+```
+# BENTHIC DATABASE
+
+## filter out problematic sites and then rename the benthic site names
+
+```{r}
+benthic_master_v2 <-
+  benthic_master |> 
+    filter(Site != "Edna_2" &
+           Site != "Edna_3" & 
+           Site != "Lihou_N1" & 
+           Site != "Lihou_S1" &
+           Site != "Lihou_S2") |> 
+  mutate(Site_recode = recode(Site,
+                       BVille_1 = "BOUG-01",
+                       Chilcott_1 = "CHIL-01",
+                       Edna_1 = "EDNA-01",
+                       Flinders_N1 = "FLIN-02",
+                       Flinders_S1 = "FLIN-01",
+                       Fred_W1 = "FRED-01",
+                       Herald_1 = "HERA-01",
+                       HerSurp_1 = "HSUP-01",
+                       Holmes_2 = "HOLM-02",
+                       Juliette_1 = "JULI-01",
+                       Juliette_2 = "JULI-02",
+                       Kenn_1 = "KENN-01",
+                       Marion_1 = "MARI-01",
+                       Osp_N1 = "OSPR-01",
+                       Saumarez_S1 = "SAUM-01",
+                       Willis_N1 = "WILL-01",
+                       Wreck_E1 = "WREC-01")) |> 
+  mutate(Survey_recode = recode(Survey,
+                                "Feb-21" = "Feb_21",
+                                "Jul-21" = "Jul_21",
+                                "Feb-22" = "Feb_22"))
+```
+
+### check levels of site in benthic database after changing the names
+
+- looks correct
+
+```{r}
+benthic_master_v2 |> 
+  with(unique(Site_recode)) |> 
+  as.tibble() |> 
+  arrange(value)
+```
+
+## create new T_ID and filter relevant columns; make another column for total macroalgae and hard coral
+
+```{r}
+benthic_master_v3 <- 
+benthic_master_v2 |> 
+  mutate(New_ID = factor(paste(Survey_recode,
+                               Site_recode,
+                               Transect,
+                               sep = "|"))) |> 
+  select(turf_algae: unconsolidated_subs,
+         Transect,
+         Depth,
+         Survey:New_ID) |> 
+  mutate(total_macroalgae = halimeda + macroalgae,
+         total_hard_coral = HC_complex + HC_encrusting + HC_plate + HC_other + HC_massive_submass)
+```
+
+# FISH DATABASE
+
+## New ID fish and filter only herbivore functional groups
+
+```{r}
+fish_master_v3 <-
+fish_master_v2 |> 
+  mutate(New_ID = factor(paste(Survey,
+                               Site,
+                               Transect,
+                               sep = "|"))) |> 
+  filter(Functional.Group == "browser" |
+           Functional.Group == "cropper/grazer" |
+           Functional.Group == "detritivore" |
+           Functional.Group == "excavator" |
+           Functional.Group == "scraper") |> 
+  filter(Family != "Chanidae" & # remove families mislabelled as herbivores
+           Family != "Ostraciidae" &
+           Family != "Pomacentridae" &
+           Family != "Tetraodontidae")
+```
+
+## wide format with functional groups as column names and values as abundance; filter relevant sites
+
+```{r}
+fish_master_abun <- 
+fish_master_v3 |> 
+  pivot_wider(names_from = Functional.Group, 
+              values_from = Number,
+              values_fn = sum) |> 
+  select(New_ID,
+         Site,
+         Transect,
+         Depth_m,
+         Benthic_Complexity,
+         `cropper/grazer`,
+         browser,
+         detritivore,
+         excavator,
+         scraper) |> 
+  rename(cropper = `cropper/grazer`) |> 
+  mutate(across(cropper: scraper,
+         ~replace_na(.x, 0))) |> 
+  filter(Site == "BOUG-01" | 
+           Site == "CHIL-01" |
+           Site == "EDNA-01" |
+           Site == "FLIN-02" |
+           Site == "FLIN-01" |
+           Site == "FRED-01" |
+           Site == "HERA-01" |
+           Site == "HSUP-01" |
+           Site == "HOLM-02" |
+           Site == "JULI-01" |
+           Site == "JULI-02" |
+           Site == "KENN-01" |
+           Site == "MARI-01" |
+           Site == "OSPR-01" |
+           Site == "SAUM-01" |
+           Site == "WILL-01" |
+           Site == "WREC-01") |> 
+  group_by(New_ID,
+           Site,
+           Transect,
+           Depth_m,
+           Benthic_Complexity) |> 
+  summarise_at(vars(cropper:scraper),
+               sum)
+```
+
+# DATA MERGING (benthic and fish abundance)
+
+```{r}
+benthic_fish_master <- 
+benthic_master_v3 |> left_join(fish_master_abun,
+                               by = join_by(New_ID))
+```
+- 51 transects with NAs
+
+# export csv (benthic_fish_database)
+
+```{r}
+db_benthic_fish <- write.csv(benthic_fish_master, "relationship_ben_fish_ab.csv") # dont use this
+```
+
+# checking 
+
+```{r}
+fish_master_abun |> 
+  filter(Site == "HERA-01")
+```
+
+# EXPERIMENTAL: DATA MERGING (FISH AND BENTHIC)
+
+
+```{r}
+fish_benthic_master <- 
+fish_master_abun |> left_join(benthic_master_v3,
+                               by = join_by(New_ID))
+```
+# export csv (fish_benthic_database)
+
+```{r}
+db_fish_benthic <- write.csv(fish_benthic_master, "relationship_fish_ab_ben.csv") # use this database
+```
+
+- 38 NAs 
+
+# export csv (benthic cover)
+
+```{r}
+db_benthic <- write.csv(benthic_master_v3, "db_benthic.csv")
+```
+
