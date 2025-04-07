@@ -1,0 +1,714 @@
+---
+title: "BC_Fish_Biom_Fits_Version2"
+format: html
+editor: visual
+---
+
+# TOTAL HERBIVORES
+
+## summary table
+
+```{r}
+herbs_b_mod_v2 |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+```
+
+## ta_newdata
+
+```{r}
+ta_bio_newdata <- with(bc_fishbiom_v3,
+                 data.frame(turf_algae = seq(min(turf_algae),
+                                          max(turf_algae),
+                                          length = 100)))
+```
+
+## predict ta change
+
+```{r}
+herb_ta_b_pred <- herbs_b_mod_v2 |> 
+  emmeans(~ turf_algae, 
+          at = ta_bio_newdata, 
+          type = "link") |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp_sprich = exp(.value)) |> 
+  dplyr::select(-.chain,
+                -.iteration,
+                -.value) |> 
+  summarise_draws(median, 
+                  HDInterval::hdi) |> 
+  as.data.frame()
+```
+
+## plot bio-ta
+
+```{r}
+f3_p9 <- 
+herb_ta_b_pred |> 
+  ggplot(aes(y = median,
+             x = turf_algae)) +
+   geom_point(data = bc_fishbiom_v3,
+             aes(y = total_herbs),
+             size = 2.5, 
+             shape = 21,
+             color = "#929FBD",
+             fill = "#929FBD",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#929FBD") +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              fill = "#929FBD",
+              color = "#929FBD",
+              alpha = 0.6) +
+  theme_classic() +
+  theme(axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_blank()) +
+  scale_x_continuous(name = "Percentage cover") +
+  ggtitle("P = 0.92") +
+  scale_y_continuous(limits = c(0,80),
+                     breaks = seq(0, 80, by = 20))
+```
+
+## ma_newdata
+
+```{r}
+ma_bio_newdata <- with(bc_fishbiom_v3,
+                 data.frame(total_macroalgae = seq(min(total_macroalgae),
+                                          max(total_macroalgae),
+                                          length = 100)))
+```
+
+## predict ma change
+
+```{r}
+herb_ma_b_pred <- herbs_b_mod_v2 |> 
+  emmeans(~ total_macroalgae, 
+          at = ma_bio_newdata, 
+          type = "link") |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp_sprich = exp(.value)) |> 
+  dplyr::select(-.chain,
+                -.iteration,
+                -.value) |> 
+  summarise_draws(median, 
+                  HDInterval::hdi) |> 
+  as.data.frame()
+```
+
+## plot bio-ma
+
+```{r}
+f3_p8 <- 
+herb_ma_b_pred |> 
+  ggplot(aes(y = median,
+             x = total_macroalgae)) +
+   geom_point(data = bc_fishbiom_v3,
+             aes(y = total_herbs),
+             size = 2.5, 
+             shape = 21,
+             color = "#8AA17D",
+             fill = "#8AA17D",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#8AA17D") +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              fill = "#8AA17D",
+              color = "#8AA17D",
+              alpha = 0.6) +
+  theme_classic() +
+  theme(axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_blank()) +
+  scale_x_continuous(name = "Percentage cover") +
+  ggtitle("P = 0.99") +
+  scale_y_continuous(limits = c(0,80),
+                     breaks = seq(0, 80, by = 20))
+```
+
+## hc_newdata
+
+```{r}
+hc_bio_newdata <- with(bc_fishbiom_v3,
+                 data.frame(total_hard_coral = seq(min(total_hard_coral),
+                                          max(total_hard_coral),
+                                          length = 100)))
+```
+
+## predict hc change
+
+```{r}
+herb_hc_b_pred <- herbs_b_mod_v2 |> 
+  emmeans(~ total_hard_coral, 
+          at = hc_bio_newdata, 
+          type = "link") |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp_sprich = exp(.value)) |> 
+  dplyr::select(-.chain,
+                -.iteration,
+                -.value) |> 
+  summarise_draws(median, 
+                  HDInterval::hdi) |> 
+  as.data.frame()
+```
+
+## plot bio-hc
+
+```{r}
+f3_p7 <- 
+herb_hc_b_pred |> 
+  ggplot(aes(y = median,
+             x = total_hard_coral)) +
+   geom_point(data = bc_fishbiom_v3,
+             aes(y = total_herbs),
+             size = 2.5, 
+             shape = 21,
+             color = "#DDD487",
+             fill = "#DDD487",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#DDD487") +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              fill = "#DDD487",
+              color = "#DDD487",
+              alpha = 0.6) +
+  theme_classic() +
+ # theme(axis.title.y = element_blank(),
+  #      axis.ticks.y = element_blank(),
+   #     axis.text.y = element_blank()) +
+  scale_x_continuous(name = "Percentage cover") +
+  scale_y_continuous(name = "Total biomass",
+                    limits = c(0,80),
+                     breaks = seq(0, 80, by = 20)) +
+  ggtitle("P = 0.99")
+```
+
+# CROPPERS
+
+## summary table
+
+```{r}
+crop_b_mod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+```
+
+## predict ta change
+
+```{r}
+crop_ta_b_pred <- crop_b_mod |> 
+  emmeans(~ turf_algae, 
+          at = ta_bio_newdata, 
+          type = "link") |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp_sprich = exp(.value)) |> 
+  dplyr::select(-.chain,
+                -.iteration,
+                -.value) |> 
+  summarise_draws(median, 
+                  HDInterval::hdi) |> 
+  as.data.frame()
+```
+
+## plot bio-ta
+
+```{r}
+f5_p3 <- 
+crop_ta_b_pred |> 
+  ggplot(aes(y = median,
+             x = turf_algae)) +
+   geom_point(data = bc_fishbiom_v3,
+             aes(y = cropper),
+             size = 2.5, 
+             shape = 21,
+             color = "#929FBD",
+             fill = "#929FBD",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#929FBD") +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              fill = "#929FBD",
+              color = "#929FBD",
+              alpha = 0.6) +
+  theme_classic() +
+  scale_y_continuous(
+                     limits = c(0,15),
+                     breaks = seq(0, 15, by = 5)) +
+  theme(axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank()) +
+  ggtitle("Turf algae 
+P = 0.85")
+```
+
+## predict ma change
+
+```{r}
+crop_ma_b_pred <- crop_b_mod |> 
+  emmeans(~ total_macroalgae, 
+          at = ma_bio_newdata, 
+          type = "link") |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp_sprich = exp(.value)) |> 
+  dplyr::select(-.chain,
+                -.iteration,
+                -.value) |> 
+  summarise_draws(median, 
+                  HDInterval::hdi) |> 
+  as.data.frame()
+```
+
+## plot bio-ma
+
+```{r}
+f5_p2 <- 
+crop_ma_b_pred |> 
+  ggplot(aes(y = median,
+             x = total_macroalgae)) +
+   geom_point(data = bc_fishbiom_v3,
+             aes(y = cropper),
+             size = 2.5, 
+             shape = 21,
+             color = "#8AA17D",
+             fill = "#8AA17D",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#8AA17D") +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              fill = "#8AA17D",
+              color = "#8AA17D",
+              alpha = 0.6) +
+  theme_classic() +
+  scale_y_continuous(
+                     limits = c(0,15),
+                     breaks = seq(0, 15, by = 5)) +
+  theme(axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank()) +
+  ggtitle("Macroalgae 
+P = 0.98")
+```
+
+## predict hc change
+
+```{r}
+crop_hc_b_pred <- crop_b_mod |> 
+  emmeans(~ total_hard_coral, 
+          at = hc_bio_newdata, 
+          type = "link") |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp_sprich = exp(.value)) |> 
+  dplyr::select(-.chain,
+                -.iteration,
+                -.value) |> 
+  summarise_draws(median, 
+                  HDInterval::hdi) |> 
+  as.data.frame()
+```
+
+## plot bio-hc
+
+```{r}
+f5_p1 <- 
+crop_hc_b_pred  |> 
+  ggplot(aes(y = median,
+             x = total_hard_coral)) +
+   geom_point(data = bc_fishbiom_v3,
+             aes(y = cropper),
+             size = 2.5, 
+             shape = 21,
+             color = "#DDD487",
+             fill = "#DDD487",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#DDD487") +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              fill = "#DDD487",
+              color = "#DDD487",
+              alpha = 0.6) +
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank()) +
+  scale_x_continuous(name = "Percentage cover") +
+  scale_y_continuous(name = "Cropper biomass",
+                     limits = c(0,15),
+                     breaks = seq(0, 15, by = 5)) + 
+  ggtitle("Hard coral 
+P = 0.98")
+```
+
+# DETRITIVORE
+
+## summary table
+
+```{r}
+det_b_mod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+```
+
+## predict ta change
+
+```{r}
+det_ta_b_pred <- det_b_mod |> 
+  emmeans(~ turf_algae, 
+          at = ta_bio_newdata, 
+          type = "link") |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp_sprich = exp(.value)) |> 
+  dplyr::select(-.chain,
+                -.iteration,
+                -.value) |> 
+  summarise_draws(median, 
+                  HDInterval::hdi) |> 
+  as.data.frame()
+```
+
+## plot bio-ta
+
+```{r}
+f5_p6 <- 
+det_ta_b_pred |> 
+  ggplot(aes(y = median,
+             x = turf_algae)) +
+   geom_point(data = bc_fishbiom_v3,
+             aes(y = detritivore),
+             size = 2.5, 
+             shape = 21,
+             color = "#929FBD",
+             fill = "#929FBD",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#929FBD") +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              fill = "#929FBD",
+              color = "#929FBD",
+              alpha = 0.6) +
+  theme_classic() +
+  scale_y_continuous(
+                     limits = c(0,15),
+                     breaks = seq(0, 15, by = 5)) +
+  theme(axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank()) +
+  ggtitle("P = 0.57")
+```
+
+## predict ma change
+
+```{r}
+det_ma_b_pred <- det_b_mod |> 
+  emmeans(~ total_macroalgae, 
+          at = ma_bio_newdata, 
+          type = "link") |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp_sprich = exp(.value)) |> 
+  dplyr::select(-.chain,
+                -.iteration,
+                -.value) |> 
+  summarise_draws(median, 
+                  HDInterval::hdi) |> 
+  as.data.frame()
+```
+
+
+## plot bio-ma
+
+```{r}
+f5_p5 <- 
+det_ma_b_pred |> 
+  ggplot(aes(y = median,
+             x = total_macroalgae)) +
+   geom_point(data = bc_fishbiom_v3,
+             aes(y = detritivore),
+             size = 2.5, 
+             shape = 21,
+             color = "#8AA17D",
+             fill = "#8AA17D",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#8AA17D") +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              fill = "#8AA17D",
+              color = "#8AA17D",
+              alpha = 0.6) +
+  theme_classic() +
+  scale_y_continuous(
+                     limits = c(0,15),
+                     breaks = seq(0, 15, by = 5)) +
+  theme(axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank()) +
+  ggtitle("P = 0.56")
+```
+
+## predict hc change
+
+```{r}
+det_hc_b_pred <- det_b_mod |> 
+  emmeans(~ total_hard_coral, 
+          at = hc_bio_newdata, 
+          type = "link") |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp_sprich = exp(.value)) |> 
+  dplyr::select(-.chain,
+                -.iteration,
+                -.value) |> 
+  summarise_draws(median, 
+                  HDInterval::hdi) |> 
+  as.data.frame()
+```
+
+## plot bio-hc
+
+```{r}
+f5_p4 <- 
+det_hc_b_pred |> 
+  ggplot(aes(y = median,
+             x = total_hard_coral)) +
+   geom_point(data = bc_fishbiom_v3,
+             aes(y = detritivore),
+             size = 2.5, 
+             shape = 21,
+             color = "#DDD487",
+             fill = "#DDD487",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#DDD487") +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              fill = "#DDD487",
+              color = "#DDD487",
+              alpha = 0.6) +
+  theme_classic()  +
+  theme(axis.title.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank()) +
+  #scale_x_continuous(name = "Percentage cover") +
+  scale_y_continuous(name = "Detritivore biomass",
+                     limits = c(0,15),
+                     breaks = seq(0, 15, by = 5)) + 
+   ggtitle("P = 0.50")
+```
+
+# SCAPER
+
+## summary table
+
+```{r}
+scra_b_mod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+```
+
+## predict ta change
+
+```{r}
+scra_ta_b_pred <- scra_b_mod |> 
+  emmeans(~ turf_algae, 
+          at = ta_bio_newdata, 
+          type = "link") |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp_sprich = exp(.value)) |> 
+  dplyr::select(-.chain,
+                -.iteration,
+                -.value) |> 
+  summarise_draws(median, 
+                  HDInterval::hdi) |> 
+  as.data.frame()
+```
+
+## plot bio-ta
+
+```{r}
+f5_p9 <- 
+scra_ta_b_pred |> 
+  ggplot(aes(y = median,
+             x = turf_algae)) +
+   geom_point(data = bc_fishbiom_v3,
+             aes(y = scraper),
+             size = 2.5, 
+             shape = 21,
+             color = "#929FBD",
+             fill = "#929FBD",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#929FBD") +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              fill = "#929FBD",
+              color = "#929FBD",
+              alpha = 0.6) +
+  theme_classic() +
+  scale_y_continuous(
+                     limits = c(0,15),
+                     breaks = seq(0, 15, by = 5)) +
+  theme(axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_blank()) +
+  scale_x_continuous(name = "Percentage cover") +
+  ggtitle("P = 0.76")
+```
+
+## predict ma change
+
+```{r}
+scra_ma_b_pred <- scra_b_mod |> 
+  emmeans(~ total_macroalgae, 
+          at = ma_bio_newdata, 
+          type = "link") |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp_sprich = exp(.value)) |> 
+  dplyr::select(-.chain,
+                -.iteration,
+                -.value) |> 
+  summarise_draws(median, 
+                  HDInterval::hdi) |> 
+  as.data.frame()
+```
+
+## plot bio-ma
+
+```{r}
+f5_p8 <- 
+scra_ma_b_pred |> 
+  ggplot(aes(y = median,
+             x = total_macroalgae)) +
+   geom_point(data = bc_fishbiom_v3,
+             aes(y = scraper),
+             size = 2.5, 
+             shape = 21,
+             color = "#8AA17D",
+             fill = "#8AA17D",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#8AA17D") +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              fill = "#8AA17D",
+              color = "#8AA17D",
+              alpha = 0.6) +
+  theme_classic() +
+  scale_y_continuous(
+                     limits = c(0,15),
+                     breaks = seq(0, 15, by = 5)) +
+  theme(axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_blank()) +
+  scale_x_continuous(name = "Percentage cover") +
+  ggtitle("P = 0.82")
+```
+
+## predict hc change
+
+```{r}
+scra_hc_b_pred <- scra_b_mod |> 
+  emmeans(~ total_hard_coral, 
+          at = hc_bio_newdata, 
+          type = "link") |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp_sprich = exp(.value)) |> 
+  dplyr::select(-.chain,
+                -.iteration,
+                -.value) |> 
+  summarise_draws(median, 
+                  HDInterval::hdi) |> 
+  as.data.frame()
+```
+
+## plot bio-hc
+
+```{r}
+f5_p7 <- 
+scra_hc_b_pred |> 
+  ggplot(aes(y = median,
+             x = total_hard_coral)) +
+   geom_point(data = bc_fishbiom_v3,
+             aes(y = scraper),
+             size = 2.5, 
+             shape = 21,
+             color = "#DDD487",
+             fill = "#DDD487",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#DDD487") +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              fill = "#DDD487",
+              color = "#DDD487",
+              alpha = 0.6) +
+  theme_classic() +
+ # theme(axis.title.y = element_blank(),
+  #      axis.ticks.y = element_blank(),
+   #     axis.text.y = element_blank()) +
+  scale_x_continuous(name = "Percentage cover")  +
+  scale_y_continuous(name = "Scraper biomass",
+                     limits = c(0,15),
+                     breaks = seq(0, 15, by = 5)) + 
+  ggtitle("P = 0.75")
+```
+
+# TOTAL HERBIVORES: Compile plots
+
+```{r}
+f3_bc_total_herbs <- 
+(f3_p1 + f3_p2 + f3_p3) /
+(f3_p4 + f3_p5 + f3_p6) /
+  (f3_p7 + f3_p8 + f3_p9)
+```
+
+## ggsave
+
+```{r}
+ggsave("Fig. 3. bc_total_herbs.jpeg",
+       plot = f3_bc_total_herbs, 
+       dpi = 600, 
+       height = 7.5, 
+       width = 7.5, 
+       units = "in")
+```
+
+# FG BIOMASS: compile plots
+
+```{r}
+p_fg_biomass <- 
+(f5_p1 + f5_p2 + f5_p3) /
+(f5_p4 + f5_p5 + f5_p6) /
+  (f5_p7 + f5_p8 + f5_p9)
+```
+
+## ggsave
+
+```{r}
+ggsave("Fig. 5. bc_fg_biom.jpeg",
+       plot = p_fg_biomass, 
+       dpi = 600, 
+       height = 7.5, 
+       width = 7.5, 
+       units = "in")
+```

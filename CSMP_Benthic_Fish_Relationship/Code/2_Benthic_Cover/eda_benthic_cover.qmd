@@ -41,6 +41,7 @@ library(iNEXT)
 benthic <- read_csv("Data/db_benthic.csv",
                            trim_ws = TRUE)
 ```
+
 # mutate to create total octocoral
 
 ```{r}
@@ -49,12 +50,11 @@ benthic <-
   mutate(total_octocoral = complex_octocoral + other_octocoral)
 ```
 
-
 # EDA
 
 ## Depth total_hard_coral
 
-- Nonlinear relationship with depth
+-   Nonlinear relationship with depth
 
 ```{r}
 benthic |> 
@@ -67,7 +67,7 @@ ggplot(aes(x = Depth,
 
 ## Depth total_macroalgae (macroalgae and Halimeda combined)
 
-- Nonlinear relationship with depth
+-   Nonlinear relationship with depth
 
 ```{r}
 `benthic |> 
@@ -80,7 +80,7 @@ ggplot(aes(x = Depth,
 
 ## Depth macroalgae (excluding Halimeda)
 
-- Nonlinear relationship with depth
+-   Nonlinear relationship with depth
 
 ```{r}
 benthic |> 
@@ -93,7 +93,7 @@ ggplot(aes(x = Depth,
 
 ## Depth turf_algae
 
-- Nonlinear relationship with depth
+-   Nonlinear relationship with depth
 
 ```{r}
 benthic |> 
@@ -117,7 +117,7 @@ ggplot(aes(x = Depth,
 
 ## Depth rock
 
-- Linear or Non-linear relationship with depth
+-   Linear or Non-linear relationship with depth
 
 ```{r}
 benthic |> 
@@ -130,7 +130,7 @@ ggplot(aes(x = Depth,
 
 ## Depth total_octocoral
 
-- Looks more linear than a GAM
+-   Looks more linear than a GAM
 
 ```{r}
 benthic |> 
@@ -143,16 +143,16 @@ ggplot(aes(x = Depth,
 
 # Variables of interest
 
-- hard coral (total)
-- macroalgae (total)
-- turf algae (total)
-- octocoral (total)
-- rock
-- unconsolidated substrate
+-   hard coral (total)
+-   macroalgae (total)
+-   turf algae (total)
+-   octocoral (total)
+-   rock
+-   unconsolidated substrate
 
 ### Depth Halimeda
 
-- No clear pattern
+-   No clear pattern
 
 ```{r}
 benthic |> 
@@ -173,3 +173,36 @@ ggplot(aes(x = Depth,
   #geom_smooth(method = "gam") +
   theme_classic()
 ```
+
+
+# pivot_longer
+
+```{r}
+benthic_long <- 
+benthic |> 
+  select(HC_complex,
+         HC_plate,
+         HC_encrusting,
+         HC_other,
+         HC_massive_submass, 
+         Depth) |> 
+  pivot_longer(!Depth,
+               names_to = "Coral_morph",
+               values_to = "Percentage_cover")
+```
+
+# eda
+
+```{r}
+benthic_long |> 
+  ggplot(aes(x = Depth,
+             y = Percentage_cover,
+             fill = Coral_morph)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_wrap(~ Coral_morph) +
+  theme_classic() +
+  scale_y_continuous(limits = c(0,100),
+                     breaks = seq(0, 100, by = 25))
+```
+

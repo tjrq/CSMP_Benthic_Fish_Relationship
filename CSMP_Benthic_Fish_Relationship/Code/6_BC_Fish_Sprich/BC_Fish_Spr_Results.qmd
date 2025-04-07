@@ -1,0 +1,189 @@
+---
+title: "BC_Fish_Spr_Results"
+format: html
+editor: visual
+---
+
+## summary table
+
+```{r}
+herbs_sp_mod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+```
+
+## ta_newdata
+
+```{r}
+ta_sp_newdata <- with(sprich_v2,
+                 data.frame(turf_algae = seq(min(turf_algae),
+                                          max(turf_algae),
+                                          length = 100)))
+```
+
+## predict ta
+
+```{r}
+sprich_pred_ta <- herbs_sp_mod  |> 
+  emmeans(~ turf_algae, 
+          at = ta_sp_newdata, 
+          type = "link") |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp_sprich = exp(.value)) |> 
+  dplyr::select(-.chain,
+                -.iteration,
+                -.value) |> 
+  summarise_draws(median, 
+                  HDInterval::hdi) |> 
+  as.data.frame()
+```
+
+## plot sp-ta
+
+```{r}
+f3_p3 <-
+sprich_pred_ta |> 
+  ggplot(aes(y = median,
+             x = turf_algae)) +
+   geom_point(data =sprich_v2,
+             aes(y = Estimator),
+             size = 2.5, 
+             shape = 21,
+             color = "#929FBD",
+             fill = "#929FBD",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#929FBD") +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              fill = "#929FBD",
+              color = "#929FBD",
+              alpha = 0.6) +
+  theme_classic() +
+  theme(axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank()) +
+  ggtitle("Turf algae
+P = 0.82") +
+  scale_y_continuous(limits = c(0,30),
+                     breaks = seq(0, 30, by = 10))
+```
+
+## ma_newdata
+
+```{r}
+ma_sp_newdata <- with(sprich_v2,
+                 data.frame(total_macroalgae = seq(min(total_macroalgae),
+                                          max(total_macroalgae),
+                                          length = 100)))
+```
+
+## predict ta
+
+```{r}
+sprich_pred_ma <- herbs_sp_mod  |> 
+  emmeans(~ total_macroalgae, 
+          at = ma_sp_newdata, 
+          type = "link") |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp_sprich = exp(.value)) |> 
+  dplyr::select(-.chain,
+                -.iteration,
+                -.value) |> 
+  summarise_draws(median, 
+                  HDInterval::hdi) |> 
+  as.data.frame()
+```
+
+## plot sp-ma
+
+```{r}
+f3_p2 <-
+sprich_pred_ma |> 
+  ggplot(aes(y = median,
+             x = total_macroalgae)) +
+   geom_point(data =sprich_v2,
+             aes(y = Estimator),
+             size = 2.5, 
+             shape = 21,
+             color = "#8AA17D",
+             fill = "#8AA17D",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#8AA17D") +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              fill = "#8AA17D",
+              color = "#8AA17D",
+              alpha = 0.6) +
+  theme_classic() +
+  theme(axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank()) +
+  ggtitle("Macroalgae
+P = 0.99") +
+  scale_y_continuous(limits = c(0,30),
+                     breaks = seq(0, 30, by = 10))
+```
+
+## hc_newdata
+
+```{r}
+hc_sp_newdata <- with(sprich_v2,
+                 data.frame(total_hard_coral = seq(min(total_hard_coral),
+                                          max(total_hard_coral),
+                                          length = 100)))
+```
+
+## predict ta
+
+```{r}
+sprich_pred_hc <- herbs_sp_mod  |> 
+  emmeans(~ total_hard_coral, 
+          at = hc_sp_newdata, 
+          type = "link") |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp_sprich = exp(.value)) |> 
+  dplyr::select(-.chain,
+                -.iteration,
+                -.value) |> 
+  summarise_draws(median, 
+                  HDInterval::hdi) |> 
+  as.data.frame()
+```
+
+## plot sp-hc
+
+```{r}
+f3_p1 <-
+sprich_pred_hc |> 
+  ggplot(aes(y = median,
+             x = total_hard_coral)) +
+   geom_point(data =sprich_v2,
+             aes(y = Estimator),
+             size = 2.5, 
+             shape = 21,
+             color = "#DDD487",
+             fill = "#DDD487",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#DDD487") +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              fill = "#DDD487",
+              color = "#DDD487",
+              alpha = 0.6) +
+  theme_classic() +
+  theme(axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.title.x = element_blank()) +
+  scale_y_continuous(name = "Species richness",
+                     limits = c(0,30),
+                     breaks = seq(0, 30, by = 10)) +
+  ggtitle("Hard coral
+P = 0.99") 
+```

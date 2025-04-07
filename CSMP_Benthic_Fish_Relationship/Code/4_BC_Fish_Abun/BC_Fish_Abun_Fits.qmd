@@ -1,0 +1,555 @@
+---
+title: "BC_Fish_Abun_fits"
+format: html
+editor: visual
+---
+
+# library
+
+```{r}
+#| label: libraries
+#| output: false
+#| eval: true
+#| warning: false
+#| message: false
+#| cache: false
+
+library(tidyverse)
+library(rstanarm)
+library(brms)
+library(coda)
+library(bayesplot)
+library(DHARMa)
+library(emmeans)
+library(broom)
+library(tidybayes)
+library(ggeffects)
+library(broom.mixed)
+library(bayestestR)
+library(see)
+library(easystats)
+library(patchwork)
+library(ggridges)
+source("helperFunctions.R")
+library(ggimage)
+library(iNEXT)
+```
+
+# data prep
+
+## load csv
+
+```{r}
+brt_bc_fishab <- read_csv("Data/relationship_fish_ab_ben.csv",
+                           trim_ws = TRUE)
+
+brt_bc_fishab_v2 <-
+  brt_bc_fishab |> 
+  filter(Depth_m >= 30)
+```
+
+## select relevant benthic and fish columns
+
+```{r}
+brt_bc_fishab_v3 <- 
+  brt_bc_fishab_v2 |> 
+  mutate(total_octocoral = complex_octocoral + other_octocoral) |> 
+  dplyr::select(Site,
+                Depth_m,
+                cropper,
+                browser,
+                detritivore,
+                excavator, 
+                scraper,
+                Benthic_Complexity,
+                turf_algae,
+                total_macroalgae,
+                total_hard_coral,
+                unconsolidated_subs,
+                total_octocoral,
+                rock) |> 
+  mutate(total_herbs = cropper + browser + detritivore + excavator + scraper)
+```
+
+## view data and remove nas
+
+```{r}
+brt_bc_fishab_v3 <-
+brt_bc_fishab_v3 |> 
+  drop_na()
+
+brt_bc_fishab_v3 |> glimpse()
+```
+
+# TOTAL HERBIVORES
+
+## eda
+
+```{r}
+brt_bc_fishab_v3 |> 
+  ggplot(aes(x = total_octocoral,
+             y = total_herbs)) +
+  geom_point() +
+  geom_smooth()
+```
+
+-   us and total herbs: looks linear
+-   oct and total herbs: looks linear
+
+## def formula
+
+```{r}
+herbs_form <- bf(total_herbs ~ unconsolidated_subs +
+                   total_octocoral +
+                   (1 | Site),
+                 family = negbinomial())
+```
+
+## examine data
+
+```{r}
+brt_bc_fishab_v3 |> 
+  summarise(log_med = log(median(total_herbs)),
+            log_mad = log(mad(total_herbs))) 
+```
+
+```{r}
+1.3/1.5
+```
+
+## weakly informed priors
+
+```{r}
+herb_priors <- prior(normal(1.3, 1.5), class = "Intercept") +
+  prior(normal(0, 1), class = "b") +
+  prior(gamma(0.01, 0.01), class = "shape") +
+  prior(student_t(3, 0, 1.5), class = "sd")
+```
+
+## prior only model
+
+```{r}
+#| cache: true
+herbs_prior_mod <- brm(herbs_form,
+                    data = brt_bc_fishab_v3,
+                    prior = herb_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+## prior eval
+
+```{r}
+herbs_prior_mod |> conditional_effects() |> 
+  plot(points = TRUE,
+       ask = FALSE,
+       plot = FALSE) |> 
+  wrap_plots() & 
+  scale_y_log10()
+```
+
+## fit the model
+
+```{r}
+#| cache: true
+herbs_mod <- update(herbs_prior_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+## partial plots
+
+```{r}
+herbs_mod |> 
+  conditional_effects() |> 
+  plot(points = TRUE,
+       ask = FALSE,
+       plot = FALSE) |> 
+  wrap_plots()
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+herbs_mod |> mcmc_plot(type = "trace")
+# autocorr
+herbs_mod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+herbs_mod |> mcmc_plot(type = "rhat_hist")
+
+# ess
+herbs_mod |> mcmc_plot(type = "neff_hist")
+```
+
+## residuals
+
+```{r}
+herbs_resids <- make_brms_dharma_res(herbs_mod)
+
+# qqplot
+herbs_resids |> testUniformity()
+
+# residplot
+herbs_resids |> plotResiduals()
+
+# testdisp
+herbs_resids |> testDispersion()
+```
+
+# CROPPERS
+
+## eda
+
+```{r}
+brt_bc_fishab_v3 |> 
+  ggplot(aes(x = unconsolidated_subs,
+             y = cropper)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+-   us and total herbs: looks linear
+-   oct and total herbs: looks linear
+
+## def formula
+
+```{r}
+crop_form <- bf(cropper ~ unconsolidated_subs +
+                   total_octocoral +
+                  total_hard_coral +
+                   (1 | Site),
+                 family = negbinomial())
+```
+
+## examine data
+
+```{r}
+brt_bc_fishab_v3 |> 
+  summarise(log_med = log(median(cropper)),
+            log_mad = log(mad(cropper))) 
+```
+
+```{r}
+0.7/1
+```
+
+## weakly informed priors
+
+```{r}
+crop_priors <- prior(normal(0.7, 1), class = "Intercept") +
+  prior(normal(0, 0.7), class = "b") +
+  prior(gamma(0.01, 0.01), class = "shape") +
+  prior(student_t(3, 0, 1), class = "sd")
+```
+
+## prior only model
+
+```{r}
+#| cache: true
+crop_prior_mod <- brm(crop_form,
+                    data = brt_bc_fishab_v3,
+                    prior = crop_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+## prior eval
+
+```{r}
+crop_prior_mod |> conditional_effects() |> 
+  plot(points = TRUE,
+       ask = FALSE,
+       plot = FALSE) |> 
+  wrap_plots() & 
+  scale_y_log10()
+```
+
+## fit the model
+
+```{r}
+#| cache: true
+crop_mod <- update(crop_prior_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+crop_mod |> mcmc_plot(type = "trace")
+# autocorr
+crop_mod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+crop_mod |> mcmc_plot(type = "rhat_hist")
+
+# ess
+crop_mod |> mcmc_plot(type = "neff_hist")
+```
+
+## residuals
+
+```{r}
+crop_resids <- make_brms_dharma_res(crop_mod)
+
+# qqplot
+crop_resids |> testUniformity()
+
+# residplot
+crop_resids |> plotResiduals()
+
+# testdisp
+crop_resids |> testDispersion()
+```
+
+# DETRITIVORE
+
+## eda
+
+```{r}
+brt_bc_fishab_v3 |> 
+  ggplot(aes(x = total_macroalgae,
+             y = detritivore)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+-   ma and total herbs: looks linear
+-   oct and total herbs: looks linear
+
+## def formula
+
+```{r}
+det_form <- bf(detritivore ~ total_macroalgae +
+                   total_octocoral +
+                   (1 | Site),
+                 family = negbinomial())
+```
+
+## examine data
+
+```{r}
+brt_bc_fishab_v3 |> 
+  summarise(log_med = log(mean(detritivore)),
+            log_mad = log(sd(detritivore))) 
+```
+
+```{r}
+0.5/1
+```
+
+## weakly informed priors
+
+```{r}
+det_priors <- prior(normal(0.5, 1), class = "Intercept") +
+  prior(normal(0, 0.5), class = "b") +
+  prior(gamma(0.01, 0.01), class = "shape") +
+  prior(student_t(3, 0, 1), class = "sd")
+```
+
+## prior only model
+
+```{r}
+#| cache: true
+det_prior_mod <- brm(det_form,
+                    data = brt_bc_fishab_v3,
+                    prior = det_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+## prior eval
+
+```{r}
+det_prior_mod |> conditional_effects() |> 
+  plot(points = TRUE,
+       ask = FALSE,
+       plot = FALSE) |> 
+  wrap_plots() & 
+  scale_y_log10()
+```
+
+## fit the model
+
+```{r}
+#| cache: true
+det_mod <- update(det_prior_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+det_mod |> mcmc_plot(type = "trace")
+# autocorr
+det_mod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+det_mod |> mcmc_plot(type = "rhat_hist")
+
+# ess
+det_mod |> mcmc_plot(type = "neff_hist")
+```
+
+## residuals
+
+```{r}
+det_resids <- make_brms_dharma_res(det_mod)
+
+# qqplot
+det_resids |> testUniformity()
+
+# residplot
+det_resids |> plotResiduals()
+
+# testdisp
+det_resids |> testDispersion()
+```
+
+# SCRAPERS
+
+## eda
+
+```{r}
+brt_bc_fishab_v3 |> 
+  ggplot(aes(x = rock,
+             y = scraper)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+-   ma and total herbs: looks linear
+-   oct and total herbs: looks linear
+
+## def formula
+
+```{r}
+scra_form <- bf(scraper ~ total_hard_coral +
+                   total_octocoral +
+                  rock + 
+                   (1 | Site),
+                 family = negbinomial())
+```
+
+## examine data
+
+```{r}
+brt_bc_fishab_v3 |> 
+  summarise(log_med = log(mean(scraper)),
+            log_mad = log(sd(scraper))) 
+```
+
+```{r}
+0.13/0.36
+```
+
+## weakly informed priors
+
+```{r}
+scra_priors <- prior(normal(0.1, 0.3), class = "Intercept") +
+  prior(normal(0, 0.3), class = "b") +
+  prior(gamma(0.01, 0.01), class = "shape") +
+  prior(student_t(3, 0, 0.3), class = "sd")
+```
+
+## prior only model
+
+```{r}
+#| cache: true
+scra_prior_mod <- brm(scra_form,
+                    data = brt_bc_fishab_v3,
+                    prior = scra_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+## prior eval
+
+```{r}
+scra_prior_mod |> conditional_effects() |> 
+  plot(points = TRUE,
+       ask = FALSE,
+       plot = FALSE) |> 
+  wrap_plots() & 
+  scale_y_log10()
+```
+
+## fit the model
+
+```{r}
+#| cache: true
+scra_mod <- update(scra_prior_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+scra_mod  |> mcmc_plot(type = "trace")
+# autocorr
+scra_mod  |> mcmc_plot(type = "acf_bar")
+
+# rhat
+scra_mod  |> mcmc_plot(type = "rhat_hist")
+
+# ess
+scra_mod |> mcmc_plot(type = "neff_hist")
+```
+
+## residuals
+
+```{r}
+scra_resids <- make_brms_dharma_res(scra_mod)
+
+# qqplot
+scra_resids |> testUniformity()
+
+# residplot
+scra_resids|> plotResiduals()
+
+# testdisp
+scra_resids |> testDispersion()
+```

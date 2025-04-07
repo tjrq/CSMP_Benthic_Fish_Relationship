@@ -1,0 +1,268 @@
+---
+title: "BC_Fish_Abun_Results_Plots"
+format: html
+editor: visual
+---
+
+# TOTAL HERBIVORES
+
+## summary table
+
+```{r}
+herbs_mod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+```
+
+-   evidence for octocoral (0.89)
+
+## oct_newdata
+
+```{r}
+oct_newdata <- with(brt_bc_fishab_v3,
+                 data.frame(total_octocoral = seq(min(total_octocoral),
+                                          max(total_octocoral),
+                                          length = 100)))
+```
+
+## predict octocoral change
+
+```{r}
+herb_oct_pred <- herbs_mod |> 
+  emmeans(~ total_octocoral, 
+          at = oct_newdata, 
+          type = "response") |> 
+  as.data.frame()
+
+glimpse(herb_oct_pred)
+```
+
+## herbs-oct plot
+
+```{r}
+herb_oct_pred |> 
+  ggplot(aes(y = prob,
+             x = total_octocoral)) +
+   geom_point(data = brt_bc_fishab_v3,
+             aes(y = total_herbs),
+             size = 2.5, 
+             shape = 21,
+             color = "#8AA17D",
+             fill = "#8AA17D",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#8AA17D") +
+  geom_ribbon(aes(ymin = lower.HPD,
+                  ymax = upper.HPD),
+              fill = "#8AA17D",
+              color = "#8AA17D",
+              alpha = 0.6) +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                       limits = c(0, 50),
+  breaks = seq(0, 50, by = 25)) +
+  scale_x_continuous(name = "Octocoral cover (%)") +
+  ggtitle("Total herbivores") +
+  theme_classic()
+```
+
+# CROPPERS
+
+## summary table
+
+```{r}
+crop_mod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+```
+
+-   no evidence for all
+
+## NO plots for CROPPERS because no evidence for anything
+
+# DETRITIVORES
+
+## summary table
+
+```{r}
+det_mod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+```
+
+-   evidence octocoral
+
+## oct_newdata
+
+```{r}
+oct_newdata <- with(brt_bc_fishab_v3,
+                 data.frame(total_octocoral = seq(min(total_octocoral),
+                                          max(total_octocoral),
+                                          length = 100)))
+```
+
+## predict octocoral change
+
+```{r}
+det_oct_pred <- det_mod |> 
+  emmeans(~ total_octocoral, 
+          at = oct_newdata, 
+          type = "response") |> 
+  as.data.frame()
+
+#glimpse(det_oct_pred)
+```
+
+## det-oct plot
+
+```{r}
+det_oct_pred |> 
+  ggplot(aes(y = prob,
+             x = total_octocoral)) +
+   geom_point(data = brt_bc_fishab_v3,
+             aes(y = detritivore),
+             size = 2.5, 
+             shape = 21,
+             color = "#8AA17D",
+             fill = "#8AA17D",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#8AA17D") +
+  geom_ribbon(aes(ymin = lower.HPD,
+                  ymax = upper.HPD),
+              fill = "#8AA17D",
+              color = "#8AA17D",
+              alpha = 0.6) +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                       limits = c(0, 50),
+  breaks = seq(0, 50, by = 25)) +
+  scale_x_continuous(name = "Octocoral cover (%)") +
+  ggtitle("Detritivores") +
+  theme_classic()
+```
+
+# SCRAPERS
+
+## summary table
+
+```{r}
+scra_mod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+```
+
+-   evidence octocoral
+-   evidence hard coral
+
+## oct_newdata
+
+```{r}
+oct_newdata <- with(brt_bc_fishab_v3,
+                 data.frame(total_octocoral = seq(min(total_octocoral),
+                                          max(total_octocoral),
+                                          length = 100)))
+```
+
+## hc_newdata
+
+```{r}
+hc_newdata <- with(brt_bc_fishab_v3,
+                 data.frame(total_hard_coral = seq(min(total_hard_coral),
+                                          max(total_hard_coral),
+                                          length = 100)))
+```
+
+## predict octocoral change
+
+```{r}
+scra_oct_pred <- scra_mod |> 
+  emmeans(~ total_octocoral, 
+          at = oct_newdata, 
+          type = "response") |> 
+  as.data.frame()
+
+#glimpse(det_oct_pred)
+```
+
+## scra-oct plot
+
+```{r}
+scra_oct_pred |> 
+  ggplot(aes(y = prob,
+             x = total_octocoral)) +
+   geom_point(data = brt_bc_fishab_v3,
+             aes(y = scraper),
+             size = 2.5, 
+             shape = 21,
+             color = "#8AA17D",
+             fill = "#8AA17D",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#8AA17D") +
+  geom_ribbon(aes(ymin = lower.HPD,
+                  ymax = upper.HPD),
+              fill = "#8AA17D",
+              color = "#8AA17D",
+              alpha = 0.6) +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                       limits = c(0, 50),
+  breaks = seq(0, 50, by = 25)) +
+  scale_x_continuous(name = "Octocoral cover (%)") +
+  ggtitle("Scapers") +
+  theme_classic()
+```
+
+## predict hard coral change
+
+```{r}
+scra_hc_pred <- scra_mod |> 
+  emmeans(~ total_hard_coral, 
+          at = hc_newdata, 
+          type = "response") |> 
+  as.data.frame()
+
+#glimpse(det_oct_pred)
+```
+
+## scra-hc plot
+
+```{r}
+scra_hc_pred |> 
+  ggplot(aes(y = prob,
+             x = total_hard_coral)) +
+   geom_point(data = brt_bc_fishab_v3,
+             aes(y = scraper),
+             size = 2.5, 
+             shape = 21,
+             color = "#8AA17D",
+             fill = "#8AA17D",
+             alpha = 0.3) +
+  geom_line(linewidth = 2,
+            color = "#8AA17D") +
+  geom_ribbon(aes(ymin = lower.HPD,
+                  ymax = upper.HPD),
+              fill = "#8AA17D",
+              color = "#8AA17D",
+              alpha = 0.6) +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                       limits = c(0, 50),
+  breaks = seq(0, 50, by = 25)) +
+  scale_x_continuous(name = "Hard coral cover (%)") +
+  ggtitle("Scapers") +
+  theme_classic()
+```

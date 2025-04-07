@@ -1,0 +1,144 @@
+---
+title: "BC_Fish_Spr_Fits"
+format: html
+editor: visual
+---
+
+# load csv
+
+```{r}
+sprich <- read_csv("Data/relationship_fish_sp_ben.csv",
+                           trim_ws = TRUE)
+
+sprich_v2 <-
+  sprich |> 
+  filter(Depth >= 30) |> 
+  mutate(Site = factor(Site_recode))
+```
+
+# eda
+
+```{r}
+sprich_v2 |> 
+  ggplot(aes(x = total_hard_coral,
+             y = Estimator)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+hist(sprich_v2$Estimator)
+```
+
+# TOTAL HERBIVORS
+
+## def formula
+
+```{r}
+herbs_form_sp <- bf(Estimator ~ turf_algae +
+                   total_macroalgae +
+                     total_hard_coral + 
+                   (1 | Site),
+                 family = lognormal())
+```
+
+## examine data
+
+```{r}
+sprich_v2 |>
+  #summarise(med = median(total_herbs),
+   #         mad = mad(total_herbs))
+  summarise(log_med = log(median(Estimator)),
+            log_mad = log(mad(Estimator))) 
+```
+
+```{r}
+1.16/1.18
+```
+
+# get prior
+
+```{r}
+get_prior(herbs_form_sp, data = sprich_v2)
+```
+
+b, Intercept, sd, sigma
+
+## weakly informed priors
+
+```{r}
+herb_sp_priors <- prior(normal(1.1, 1.2), class = "Intercept") +
+  prior(normal(0, 1), class = "b") +
+  prior(student_t(3, 0, 1.2), class = "sigma") +
+  prior(student_t(3, 0, 1.2), class = "sd") # +
+  #prior(beta(1, 1), class = "hu")
+```
+
+## prior only model
+
+```{r}
+#| cache: true
+herbs_sp_prior_mod <- brm(herbs_form_sp,
+                    data = sprich_v2,
+                    prior = herb_sp_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+## prior eval
+
+```{r}
+herbs_sp_prior_mod  |> conditional_effects() |> 
+  plot(points = TRUE,
+       ask = FALSE,
+       plot = FALSE) |> 
+  wrap_plots() & 
+  scale_y_log10()
+```
+
+## fit the model
+
+```{r}
+#| cache: true
+herbs_sp_mod <- update(herbs_sp_prior_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+herbs_sp_mod|> mcmc_plot(type = "trace")
+# autocorr
+herbs_sp_mod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+herbs_sp_mod|> mcmc_plot(type = "rhat_hist")
+
+# ess
+herbs_sp_mod |> mcmc_plot(type = "neff_hist")
+```
+
+## residuals
+
+```{r}
+herbs_sp_resids <- make_brms_dharma_res(herbs_sp_mod)
+
+# qqplot
+herbs_sp_resids |> testUniformity()
+
+# residplot
+herbs_sp_resids |> plotResiduals(quantreg = FALSE)
+
+# testdisp
+herbs_sp_resids |> testDispersion()
+```
+
