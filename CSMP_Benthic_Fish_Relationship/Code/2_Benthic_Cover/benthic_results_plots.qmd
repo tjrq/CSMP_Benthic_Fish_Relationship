@@ -1,26 +1,86 @@
 ---
-title: "benthic_model_plots"
+title: "benthic_results_plots_version3"
 format: html
 editor: visual
 ---
 
-# CORAL
-
-## summary table
+# Cleanup
 
 ```{r}
-coral_mod_glm |> as_draws_df() |> 
-  dplyr::select(matches("^b_.*")) |> 
-  exp() |> # exp to get log-odds scale (crosses 1)
-  summarise_draws(median,
-                  HDInterval::hdi, 
-                  Pl= ~mean(.x < 1),
-                  Pg = ~mean(.x > 1))
+rm(list=ls())
+gc()
 ```
 
--   2% reduction in coral cover with increasing depth
+# Description
 
-## newdata
+Code for plotting figures from the GLMM/GLMM posterior predictions.
+
+# Load library
+
+```{r}
+#| label: libraries
+#| output: false
+#| eval: true
+#| warning: false
+#| message: false
+#| cache: false
+
+library(tidyverse)
+library(rstanarm)
+library(brms)
+library(coda)
+library(bayesplot)
+library(DHARMa)
+library(emmeans)
+library(broom)
+library(tidybayes)
+library(ggeffects)
+library(broom.mixed)
+library(bayestestR)
+library(see)
+library(easystats)
+library(patchwork)
+library(ggridges)
+source("helperFunctions.R")
+library(ggimage)
+library(iNEXT)
+```
+
+# Load csv
+
+```{r}
+benthic <- read_csv("Data/db_benthic.csv", trim_ws = TRUE)
+```
+
+# Prepare db
+
+```{r}
+benthic_v2 <- 
+  benthic |>
+  mutate(Site_recode = factor(Site_recode),
+         total_octocoral = complex_octocoral + other_octocoral) |> 
+  select(Depth,
+         Site_recode,
+         Habitat,
+         Aspect_descriptive,
+         total_hard_coral,
+         total_macroalgae,
+         total_octocoral,
+         turf_algae,
+         sponge,
+         unconsolidated_subs) |> 
+  mutate(prop_hc = total_hard_coral / 100,
+         prop_ma = total_macroalgae / 100,
+         prop_oct = total_octocoral / 100,
+         prop_ta = turf_algae / 100,
+         prop_sponge = sponge / 100,
+         prop_us = unconsolidated_subs / 100) |> 
+  filter(Habitat == "outer_reef")
+
+#glimpse(benthic_v2)
+```
+
+## Newdata
 
 ```{r}
 depth_newdata <- with(benthic_v2,
@@ -29,50 +89,80 @@ depth_newdata <- with(benthic_v2,
                                              length = 100)))
 ```
 
-## predict coral cover
+# CORAL
+
+## Load model
 
 ```{r}
-coral_depth_pred <- coral_mod_glm |> 
-  emmeans(~ Depth, 
-          at = depth_newdata, 
-          type = "response") |> 
-  as.data.frame() |> 
-  mutate(p_cover = response * 100,
-         p_cover_lower = lower.HPD * 100,
-         p_cover_upper = upper.HPD * 100)
+load("Model_Output/coral_mod_glm.Rdata")
 ```
 
-## plot coral cover
+## Summary table
+
+```{r}
+coral_mod_glm |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*|^bs.*|sds.*")) |>  
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1))
+```
+
+## Emmeans
+
+```{r}
+coral_em <- 
+  coral_mod_glm |> 
+  emmeans(~ Depth,
+          at = depth_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+## Gather emmeans
+
+```{r}
+coral_em_draws <- 
+gather_emmeans_draws(coral_em)
+```
+
+## Subset 200 draws
+
+```{r}
+coral_draw_subset <- sample(unique(coral_em_draws$.draw), 200)
+
+coral_em_draws_200 <- coral_em_draws  |>  
+  filter(.draw %in% coral_draw_subset)
+```
+
+## Plot
 
 ```{r}
 p3_hard_coral <- 
-coral_depth_pred |> 
-  ggplot(aes(y = p_cover,
-             x = Depth)) +
-  geom_point(data = benthic_v2,
-             aes(y = total_hard_coral),
-             size = 2.5, 
-             shape = 21,
-             color = "#DDD487",
-             fill = "#DDD487",
-             alpha = 0.3) +
-  geom_line(linewidth = 2, 
-            color = "#DDD487") +
-  geom_ribbon(aes(ymin = p_cover_lower,
-                  ymax = p_cover_upper),
-              fill = "#DDD487",
-              color = "#DDD487",
-              alpha = 0.6) +
-  scale_y_continuous(name = "Percentage cover",
-                     limits = c(0, 100),
-                     breaks = seq(0, 100, by = 25)) +
+coral_em_draws_200 |> 
+  ggplot(aes(x = Depth, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#DDD487", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "yellow4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "yellow4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "Proportional cover",
+                     limits = c(0,0.75),
+                     breaks = seq(0, 0.75, by = 0.25)) +
+  theme_classic() +
   scale_x_continuous(name = "") +
-  ggtitle("Hard coral
-P = 0.99") +
+  ggtitle("Hard coral") +
   theme_classic() +
   theme(axis.title.x = element_blank(),
         axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
+        #axis.ticks.x = element_blank(),
         axis.title.y = element_text(size = 15),
         axis.text.y = element_text(size = 12),
         plot.title = element_text(size = 18))
@@ -80,12 +170,18 @@ P = 0.99") +
 
 # MACROALGAE
 
-## summary table
+## Load model
+
+```{r}
+load("Model_Output/ma_mod_glm.Rdata")
+```
+
+## Summary table
 
 ```{r}
 ma_mod_glm |> as_draws_df() |> 
   #dplyr::select(matches("^bs_.*")) |>
-  dplyr::select(matches("^b_.*")) |> 
+  dplyr::select(matches("^b_.*|^bs.*|sds.*")) |> 
   exp() |> # exp to get log-odds scale (crosses 1)
   summarise_draws(median,
                   HDInterval::hdi, 
@@ -93,65 +189,79 @@ ma_mod_glm |> as_draws_df() |>
                   Pg = ~mean(.x > 1))
 ```
 
--   Both GLM and GAM models suggest no changes in macroalgae with depth
-
-## predict ma cover
+## Emmeans
 
 ```{r}
-ma_depth_pred <- ma_mod_glm  |> 
-  emmeans(~ Depth, 
-          at = depth_newdata, 
-          type = "response") |> 
-  as.data.frame() |> 
-  mutate(p_cover = response * 100,
-         p_cover_lower = lower.HPD * 100,
-         p_cover_upper = upper.HPD * 100)
+ma_em <- 
+  ma_mod_glm |> 
+  emmeans(~ Depth,
+          at = depth_newdata,
+          type = "response",
+          epred = "TRUE") 
 ```
 
-## plot ma cover
+## Gather emmeans
+
+```{r}
+ma_em_draws <- 
+gather_emmeans_draws(ma_em)
+```
+
+## Subset 200 draws
+
+```{r}
+ma_draw_subset <- sample(unique(ma_em_draws$.draw), 200)
+
+ma_em_draws_200 <- ma_em_draws  |>  
+  filter(.draw %in% ma_draw_subset)
+```
+
+## Plot
 
 ```{r}
 p1_ma <- 
-ma_depth_pred |> 
-  ggplot(aes(y = p_cover,
-             x = Depth)) +
-  geom_point(data = benthic_v2,
-             aes(y = total_macroalgae),
-             size = 2.5, 
-             shape = 21,
-             color = "#8AA17D",
-             fill = "#8AA17D",
-             alpha = 0.3) +
-  geom_line(linewidth = 2, 
-            color = "#8AA17D") +
-  geom_ribbon(aes(ymin = p_cover_lower,
-                  ymax = p_cover_upper),
-              fill = "#8AA17D",
-              color = "#8AA17D",
-              alpha = 0.6) +
-  scale_y_continuous(name = "Percentage cover",
-                     limits = c(0, 100),
-                     breaks = seq(0, 100, by = 25)) +
-  scale_x_continuous(name = "") +
-  ggtitle("Macroalgae
-P = 0.71") +
+ma_em_draws_200 |> 
+  ggplot(aes(x = Depth, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#8AA17D", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkgreen", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkgreen", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "Proportional cover",
+                     limits = c(0,0.75),
+                     breaks = seq(0, 0.75, by = 0.25)) +
   theme_classic() +
-  theme(axis.title.x = element_blank(),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.y = element_text(size = 15),
+  scale_x_continuous(name = "Depth (m)") +
+  ggtitle("Macroalgae") +
+  theme_classic() +
+  theme(axis.title.y = element_text(size = 15),
         axis.text.y = element_text(size = 12),
+        #axis.ticks.y = element_blank(),
+        axis.title.x = element_text(size = 15),
+        axis.text.x = element_text(size = 12),
         plot.title = element_text(size = 18))
 ```
 
-# TURF ALGAE
+# TURFS
 
-## summary table
+## Load model
+
+```{r}
+load("Model_Output/ta_mod_glm.Rdata")
+```
+
+## Summary table
 
 ```{r}
 ta_mod_glm |> as_draws_df() |> 
   #dplyr::select(matches("^bs_.*")) |>
-  dplyr::select(matches("^b_.*")) |> 
+    dplyr::select(matches("^b_.*|^bs.*|sds.*")) |> 
   exp() |> # exp to get log-odds scale (crosses 1)
   summarise_draws(median,
                   HDInterval::hdi, 
@@ -159,65 +269,79 @@ ta_mod_glm |> as_draws_df() |>
                   Pg = ~mean(.x > 1))
 ```
 
--   \~ 2% change with depth
-
-## predict ta cover
+## Emmeans
 
 ```{r}
-ta_depth_pred <- ta_mod_glm |> 
-  emmeans(~ Depth, 
-          at = depth_newdata, 
-          type = "response") |> 
-  as.data.frame() |> 
-  mutate(p_cover = response * 100,
-         p_cover_lower = lower.HPD * 100,
-         p_cover_upper = upper.HPD * 100)
+ta_em <- 
+  ta_mod_glm |> 
+  emmeans(~ Depth,
+          at = depth_newdata,
+          type = "response",
+          epred = "TRUE") 
 ```
 
-## plot ta cover
+## Gather emmeans
+
+```{r}
+ta_em_draws <- 
+gather_emmeans_draws(ta_em)
+```
+
+## Subset 200 draws
+
+```{r}
+ta_draw_subset <- sample(unique(ta_em_draws$.draw), 200)
+
+ta_em_draws_200 <- ta_em_draws  |>  
+  filter(.draw %in% ta_draw_subset)
+```
+
+## Plot
 
 ```{r}
 p2_ta_cover <- 
-ta_depth_pred |> 
-  ggplot(aes(y = p_cover,
-             x = Depth)) +
-  geom_point(data = benthic_v2,
-             aes(y = turf_algae),
-             size = 2.5, 
-             shape = 21,
-             color = "#929FBD",
-             fill = "#929FBD",
-             alpha = 0.3) +
-  geom_line(linewidth = 2, 
-            color = "#929FBD") +
-  geom_ribbon(aes(ymin = p_cover_lower,
-                  ymax = p_cover_upper),
-              fill = "#929FBD",
-              color = "#929FBD",
-              alpha = 0.6) +
+ta_em_draws_200 |> 
+  ggplot(aes(x = Depth, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#929FBD", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "dodgerblue4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "dodgerblue4", 
+                  .width = 0.001, 
+                  alpha = 1) +
   scale_y_continuous(name = "Percentage cover",
-                     limits = c(0, 100),
-                     breaks = seq(0, 100, by = 25)) +
-  scale_x_continuous(name = "") +
-  ggtitle("Turf algae
-P = 0.99") +
+                     limits = c(0,0.75),
+                     breaks = seq(0, 0.75, by = 0.25)) +
   theme_classic() +
-  theme(axis.title = element_blank(),
-        axis.text = element_blank(),
-        axis.ticks = element_blank(),
-        #axis.title.y = element_text(size = 15),
-        #axis.text.y = element_text(size = 12),
+  scale_x_continuous(name = "") +
+  ggtitle("Turfs") +
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        #axis.ticks = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
         plot.title = element_text(size = 18))
 ```
 
 # OCTOCORAL
 
-## summary table
+## Load model
 
 ```{r}
-oct_mod_glm |> as_draws_df() |> 
+load("Model_Output/oct_mod.Rdata")
+```
+
+## Summary table
+
+```{r}
+oct_mod |> as_draws_df() |> 
   #dplyr::select(matches("^bs_.*")) |>
-  dplyr::select(matches("^b_.*")) |> 
+ dplyr::select(matches("^b_.*|^bs.*|sds.*")) |> 
   exp() |> # exp to get log-odds scale (crosses 1)
   summarise_draws(median,
                   HDInterval::hdi, 
@@ -225,63 +349,79 @@ oct_mod_glm |> as_draws_df() |>
                   Pg = ~mean(.x > 1))
 ```
 
-## predict oct cover
+## Emmeans
 
 ```{r}
-oct_depth_pred <- oct_mod_glm |> 
-  emmeans(~ Depth, 
-          at = depth_newdata, 
-          type = "response") |> 
-  as.data.frame() |> 
-  mutate(p_cover = response * 100,
-         p_cover_lower = lower.HPD * 100,
-         p_cover_upper = upper.HPD * 100)
+oct_em <- 
+  oct_mod |> 
+  emmeans(~ Depth,
+          at = depth_newdata,
+          type = "response",
+          epred = "TRUE") 
 ```
 
-## plot oct cover
+## Gather emmeans
+
+```{r}
+oct_em_draws <- 
+gather_emmeans_draws(oct_em)
+```
+
+## Subset 200 draws
+
+```{r}
+oct_draw_subset <- sample(unique(oct_em_draws$.draw), 200)
+
+oct_em_draws_200 <- oct_em_draws  |>  
+  filter(.draw %in% oct_draw_subset)
+```
+
+## Plot
 
 ```{r}
 p4_oct_cover <- 
-oct_depth_pred |> 
-  ggplot(aes(y = p_cover,
-             x = Depth)) +
-  geom_point(data = benthic_v2,
-             aes(y = total_octocoral),
-             size = 2.5, 
-             shape = 21,
-             color = "#BFB59E",
-             fill = "#BFB59E",
-             alpha = 0.3) +
-  geom_line(linewidth = 2, 
-            color = "#BFB59E") +
-  geom_ribbon(aes(ymin = p_cover_lower,
-                  ymax = p_cover_upper),
-              fill = "#BFB59E",
-              color = "#BFB59E",
-              alpha = 0.6) +
+oct_em_draws_200 |> 
+  ggplot(aes(x = Depth, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#BFB59E", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkorange4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkorange4", 
+                  .width = 0.001, 
+                  alpha = 1) +
   scale_y_continuous(name = "Percentage cover",
-                     limits = c(0, 100),
-                     breaks = seq(0, 100, by = 25)) +
-  scale_x_continuous(name = "") +
-  ggtitle("Octocoral
-P = 1") +
+                     limits = c(0,0.75),
+                     breaks = seq(0, 0.75, by = 0.25)) +
   theme_classic() +
-  theme(axis.title = element_blank(),
-        axis.text = element_blank(),
-        axis.ticks = element_blank(),
-        #axis.title.y = element_text(size = 15),
-        #axis.text.y = element_text(size = 12),
+  scale_x_continuous(name = "") +
+  ggtitle("Octocoral") +
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        #axis.ticks = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
         plot.title = element_text(size = 18))
 ```
 
-# ROCK
+# SPONGE
 
-## summary table
+## Load model
 
 ```{r}
-rock_mod_glm |> as_draws_df() |> 
+load("Model_Output/sp_mod_glm.Rdata")
+```
+
+## Summary table
+
+```{r}
+sp_mod_glm |> as_draws_df() |> 
   #dplyr::select(matches("^bs_.*")) |>
-  dplyr::select(matches("^b_.*")) |> 
+ dplyr::select(matches("^b_.*|^bs.*|sds.*"))  |> 
   exp() |> # exp to get log-odds scale (crosses 1)
   summarise_draws(median,
                   HDInterval::hdi, 
@@ -289,59 +429,79 @@ rock_mod_glm |> as_draws_df() |>
                   Pg = ~mean(.x > 1))
 ```
 
-## predict rock cover
+## Emmeans
 
 ```{r}
-rock_depth_pred <- rock_mod_glm |> 
-  emmeans(~ Depth, 
-          at = depth_newdata, 
-          type = "response") |> 
-  as.data.frame() |> 
-  mutate(p_cover = response * 100,
-         p_cover_lower = lower.HPD * 100,
-         p_cover_upper = upper.HPD * 100)
+sp_em <- 
+  sp_mod_glm |> 
+  emmeans(~ Depth,
+          at = depth_newdata,
+          type = "response",
+          epred = "TRUE") 
 ```
 
-## plot rock cover
+## Gather emmeans
 
 ```{r}
-p5_rock_cover <- 
-rock_depth_pred |> 
-  ggplot(aes(y = p_cover,
-             x = Depth)) +
-  geom_point(data = benthic_v2,
-             aes(y = rock),
-             size = 2.5, 
-             shape = 21,
-             color = "#E29297",
-             fill = "#E29297",
-             alpha = 0.3) +
-  geom_line(linewidth = 2, 
-            color = "#E29297") +
-  geom_ribbon(aes(ymin = p_cover_lower,
-                  ymax = p_cover_upper),
-              fill = "#E29297",
-              color = "#E29297",
-              alpha = 0.6) +
-  scale_y_continuous(name = "Percentage cover",
-                     limits = c(0, 100),
-                     breaks = seq(0, 100, by = 25)) +
-  scale_x_continuous(name = "Depth (m)") +
-  ggtitle("Rock
-P = 1") +
+sp_em_draws <- 
+gather_emmeans_draws(sp_em)
+```
+
+## Subset 200 draws
+
+```{r}
+sp_draw_subset <- sample(unique(sp_em_draws$.draw), 200)
+
+sp_em_draws_200 <- sp_em_draws  |>  
+  filter(.draw %in% sp_draw_subset)
+```
+
+## Plot
+
+```{r}
+p5_sp_cover <- 
+sp_em_draws_200 |> 
+  ggplot(aes(x = Depth, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#E29297", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "firebrick4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "firebrick4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "Proportional cover",
+                     limits = c(0,0.75),
+                     breaks = seq(0, 0.75, by = 0.25)) +
   theme_classic() +
-  theme(
-        axis.title = element_text(size = 15),
-        axis.text = element_text(size = 12),
+  scale_x_continuous(name = "") +
+  ggtitle("Sponge") +
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        #axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 15),
+        axis.text.y = element_text(size = 12),
         plot.title = element_text(size = 18))
 ```
 
-# UNCONSILDATED SUBS
+# UNCONSOLIDATED SUBS
+
+## Load model
+
+```{r}
+load("Model_Output/us_mod_glm.Rdata")
+```
+
+## Summary table
 
 ```{r}
 us_mod_glm |> as_draws_df() |> 
   #dplyr::select(matches("^bs_.*")) |>
-  dplyr::select(matches("^b_.*")) |> 
+ dplyr::select(matches("^b_.*|^bs.*|sds.*")) |> 
   exp() |> # exp to get log-odds scale (crosses 1)
   summarise_draws(median,
                   HDInterval::hdi, 
@@ -349,50 +509,60 @@ us_mod_glm |> as_draws_df() |>
                   Pg = ~mean(.x > 1))
 ```
 
-## predict us cover
+## Emmeans
 
 ```{r}
-us_depth_pred <- us_mod_glm |> 
-  emmeans(~ Depth, 
-          at = depth_newdata, 
-          type = "response") |> 
-  as.data.frame() |> 
-  mutate(p_cover = response * 100,
-         p_cover_lower = lower.HPD * 100,
-         p_cover_upper = upper.HPD * 100)
+us_em <- 
+  us_mod_glm |> 
+  emmeans(~ Depth,
+          at = depth_newdata,
+          type = "response",
+          epred = "TRUE") 
 ```
 
-## plot us cover
+## Gather emmeans
 
 ```{r}
-p6_us_cover <-
-us_depth_pred |> 
-  ggplot(aes(y = p_cover,
-             x = Depth)) +
-  geom_point(data = benthic_v2,
-             aes(y = unconsolidated_subs),
-             size = 2.5, 
-             shape = 21,
-             color = "#BFAECF",
-             fill = "#BFAECF",
-             alpha = 0.3) +
-  geom_line(linewidth = 2, 
-            color = "#BFAECF") +
-  geom_ribbon(aes(ymin = p_cover_lower,
-                  ymax = p_cover_upper),
-              fill = "#BFAECF",
-              color = "#BFAECF",
-              alpha = 0.6) +
+us_em_draws <- 
+gather_emmeans_draws(us_em)
+```
+
+## Subset 200 draws
+
+```{r}
+us_draw_subset <- sample(unique(us_em_draws$.draw), 200)
+
+us_em_draws_200 <- us_em_draws  |>  
+  filter(.draw %in% us_draw_subset)
+```
+
+## Plot
+
+```{r}
+p6_us_cover <- 
+us_em_draws_200 |> 
+  ggplot(aes(x = Depth, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#BFAECF", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkorchid4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkorchid4", 
+                  .width = 0.001, 
+                  alpha = 1) +
   scale_y_continuous(name = "Percentage cover",
-                     limits = c(0, 100),
-                     breaks = seq(0, 100, by = 25)) +
+                     limits = c(0,0.75),
+                     breaks = seq(0, 0.75, by = 0.25)) +
+  theme_classic() +
   scale_x_continuous(name = "Depth (m)") +
-  ggtitle("Unconsolidated substrate
-P = 0.56") +
+  ggtitle("Unconsolidated substrate") +
   theme_classic() +
   theme(axis.title.y = element_blank(),
         axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
+        #axis.ticks.y = element_blank(),
         axis.title.x = element_text(size = 15),
         axis.text.x = element_text(size = 12),
         plot.title = element_text(size = 18))
@@ -402,18 +572,20 @@ P = 0.56") +
 
 ```{r}
 p_benthic_cover_depth <- 
-(p1_ma + p2_ta_cover) /
-  (p3_hard_coral + p4_oct_cover) /
-  (p5_rock_cover + p6_us_cover)
+(p3_hard_coral + p2_ta_cover) /
+  (p5_sp_cover + p4_oct_cover) /
+  (p1_ma + p6_us_cover) +
+  plot_annotation(tag_levels = "a") &
+  theme(plot.tag = element_text(size = 15))
 ```
 
--   Add images but this is okay for now
+# ggsave
 
 ```{r}
-ggsave("Fig. 2. bc_depth.jpeg",
+ggsave("Figures/Fig. 2. V4_bc_depth.jpeg",
        plot = p_benthic_cover_depth, 
        dpi = 600, 
        height = 8.5, 
-       width = 8.5, 
+       width = 9, 
        units = "in")
 ```

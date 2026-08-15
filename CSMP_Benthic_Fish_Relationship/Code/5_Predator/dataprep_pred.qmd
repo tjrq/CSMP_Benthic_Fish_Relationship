@@ -1,0 +1,189 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+# Description
+
+This qmd file prepares the predator database by isolating predators from the preds file of a colleage and then combine that database with my database on herbivorous fishes. The preds data file is not in the Data column as other people are still working on this dataset.
+
+# Clean up
+
+```{r}
+gc()
+rm(list=ls())
+```
+
+# Load data
+
+```{r}
+load("Data/preds.Rdata")
+```
+
+Notes: this file is not shared as other colleagues are working on this metadata
+
+# Data preparation
+
+## Check pred sites
+
+```{r}
+preds |> distinct(Site)
+```
+
+5 sites not present in my herbivore data
+
+## Filter relevant sites
+
+```{r}
+preds_filt <-
+  preds |> 
+    filter(Site %in% c("BOUG-01",
+                       "FLIN-01",
+                       "HERA-01",
+                       "HOLM-02",
+                       "KENN-01",
+                       "WIL-01",
+                       "WRECK-01",
+                       "HSUP-01",
+                       "EDNA-01",
+                       "JULI-01",
+                       "JU")) |> 
+  filter(Survey %in% c("Feb_21",
+                       "Jul_21", 
+                       "Feb_22")) |> 
+  mutate(New_ID = factor(paste(Survey,
+                               Site,
+                               Transect,
+                               Depth_m,
+                               sep = "|"))) |> 
+  select(New_ID,
+         Survey,
+         Reef_1,
+         Reef_2,
+         Site,
+         Transect,
+         Family,
+         Genus,
+         Species,
+         Number,
+         Depth_m,
+         Binomial,
+         Functional.Group)
+```
+
+## Check families
+
+```{r}
+preds_filt |> distinct(Family)
+```
+
+## Group by family and species
+
+```{r}
+preds_filt |> 
+  group_by(Family) |> 
+  summarise(species_list = paste(unique(Binomial)))
+```
+
+## Group by species and functional group
+
+```{r}
+preds_filt |> 
+  group_by(Binomial) |> 
+  summarise(FG = paste(unique(Functional.Group)))
+```
+
+## Checks
+
+```{r}
+preds_filt
+```
+
+# Merge data with herbivorous fishes
+
+## load herbivore data
+
+```{r}
+herb_prey <- read_csv("Data/relationship_fish_ab_ben_version3.csv",
+                      trim_ws = TRUE)
+```
+
+## Select relevant columns
+
+```{r}
+herb_prey_filtered <-
+  herb_prey |> 
+  select(New_ID,
+         Site,
+         Transect.x,
+         Depth_m,
+         cropper,
+         browser,
+         detritivore,
+         excavator,
+         scraper,
+         Survey_recode)
+  
+```
+
+## Combine pred and prey database
+
+```{r}
+db_predation <- 
+  preds_filt |> left_join(herb_prey_filtered,
+                               by = join_by(New_ID)) |> 
+  drop_na()
+```
+
+# Export as csv
+
+```{r}
+db_predation_csv <- write.csv(db_predation, "Data/db_predation.csv")
+```
+
+## Create total abundance column
+
+```{r}
+db_predation <-
+  db_predation |> 
+  mutate(total_herbs = cropper + browser + detritivore + excavator + scraper)
+```
+
+# Exploratory data analysis
+
+## Plot: total herbs
+
+```{r}
+db_predation |> 
+  ggplot(aes(x = Number, y = total_herbs)) +
+  geom_point(position = position_jitter()) +
+  geom_smooth(method = "lm")
+```
+
+## Plot: cropper
+
+```{r}
+db_predation |> 
+  ggplot(aes(x = Number, y = cropper)) +
+  geom_point(position = position_jitter()) +
+  geom_smooth(method = "lm")
+```
+
+## Plot: detritivore
+
+```{r}
+db_predation |> 
+  ggplot(aes(x = Number, y = detritivore)) +
+  geom_point(position = position_jitter()) +
+  geom_smooth(method = "lm")
+```
+
+## Plot: scraper
+
+```{r}
+db_predation |> 
+  ggplot(aes(x = Number, y = scraper)) +
+  geom_point(position = position_jitter()) +
+  geom_smooth(method = "lm")
+```

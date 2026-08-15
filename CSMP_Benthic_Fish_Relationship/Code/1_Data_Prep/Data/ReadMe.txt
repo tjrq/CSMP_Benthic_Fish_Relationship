@@ -1,0 +1,1 @@
+Rawdata files used for filtering out herbivorous fishes are not included here as other colleagues are working on these for their own works. The extracted herbivore fish species data are in the folder before this folder that houses the metadata. 

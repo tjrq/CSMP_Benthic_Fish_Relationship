@@ -1,0 +1,1179 @@
+---
+title: "BC_Fish_Abun_Fits_2"
+format: html
+editor: visual
+---
+# Description
+
+R code that analyzes the relationship between benthic cover and herbivorous fish abundance, and changes in fish abundance with depth. For the benthic cover and herbivorous fish models, benthic cover was partitioned into whether herbivorous fishes potentially used them as habitat or food. 
+
+# Clean up
+
+```{r}
+rm(list=ls())
+gc()
+```
+
+# Library
+
+```{r}
+#| label: libraries
+#| output: false
+#| eval: true
+#| warning: false
+#| message: false
+#| cache: false
+
+library(tidyverse)
+library(rstanarm)
+library(brms)
+library(coda)
+library(bayesplot)
+library(DHARMa)
+library(emmeans)
+library(broom)
+library(tidybayes)
+library(ggeffects)
+library(broom.mixed)
+library(bayestestR)
+library(see)
+library(easystats)
+library(patchwork)
+library(ggridges)
+source("helperFunctions.R")
+library(ggimage)
+library(iNEXT)
+```
+
+## Load csv
+
+```{r}
+fishab <- read_csv("Data/relationship_fish_ab_ben_version3.csv",
+                           trim_ws = TRUE)
+```
+
+## Select relevant benthic and fish columns
+
+```{r}
+fishab_2 <- 
+  fishab |> 
+  mutate(total_octocoral = complex_octocoral + other_octocoral) |> 
+  dplyr::select(Site_recode,
+                Habitat,
+                #Aspect_descriptive,
+                Depth_m,
+                cropper,
+                browser,
+                detritivore,
+                excavator, 
+                scraper,
+                Benthic_Complexity,
+                turf_algae,
+                total_macroalgae,
+                total_hard_coral,
+                unconsolidated_subs,
+                total_octocoral,
+                sponge) |> 
+  mutate(total_herbs = cropper + browser + detritivore + excavator + scraper,
+         Benthic_Complexity = factor(Benthic_Complexity)) |> 
+  mutate(Benthic_Complexity = replace(Benthic_Complexity,
+                                 Benthic_Complexity == 3.5,
+                                 3)) |> 
+  filter(Habitat == "outer_reef") # only grabbed sites that were outer reefs
+```
+
+# =================
+
+Code from here examines the relationship between benthic cover and herbivorous fishes (overall and for each feeding group)
+
+# TOTAL HERBIVORS
+
+## HABITAT MODEL
+
+### Def formula
+
+```{r}
+herbs_form_ab_hab <- bf(total_herbs ~ 
+                   Benthic_Complexity +
+                  # turf_algae +
+                  # total_macroalgae +
+                   total_hard_coral + 
+                   unconsolidated_subs +
+                   total_octocoral +
+                  # sponge +
+                   (1 | Site_recode), #+
+                    #(1 | Habitat_type) +
+                    #(1 | Aspect_descriptive),
+                 family = negbinomial())
+```
+
+### Weakly informed priors
+
+```{r}
+herb_priors_v2 <- prior(normal(1.3, 1.5), class = "Intercept") +
+  prior(normal(0, 1), class = "b") +
+  prior(gamma(0.01, 0.01), class = "shape") +
+  prior(student_t(3, 0, 1.5), class = "sd")
+```
+
+### Prior only model
+
+```{r}
+#| cache: true
+herbs_prior_ab_hab_mod <- brm(herbs_form_ab_hab,
+                    data = fishab_2,
+                    prior = herb_priors_v2,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+### Fit the model
+
+```{r}
+#| cache: true
+herbs_mod_ab_hab <- update(herbs_prior_ab_hab_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+#### MCMC diagnostics
+
+```{r}
+# trace
+herbs_mod_ab_hab |> mcmc_plot(type = "trace")
+# autocorr
+herbs_mod_ab_hab |> mcmc_plot(type = "acf_bar")
+
+# rhat
+herbs_mod_ab_hab |> mcmc_plot(type = "rhat_hist")
+
+# ess
+herbs_mod_ab_hab |> mcmc_plot(type = "neff_hist")
+```
+
+#### Residuals
+
+```{r}
+herbs_resids_hab <- make_brms_dharma_res(herbs_mod_ab_hab)
+
+# qqplot
+herbs_resids_hab |> testUniformity()
+
+# residplot
+herbs_resids_hab |> plotResiduals()
+
+# testdisp
+herbs_resids_hab |> testDispersion()
+```
+
+##### Save ab hab model
+
+```{r}
+save(herbs_mod_ab_hab, file = "Model_Output/herbs_mod_ab_hab_ver2.Rdata")
+```
+
+## FOOD MODEL
+
+### Def formula
+
+```{r}
+herbs_form_ab_food <- bf(total_herbs ~ 
+                   #Benthic_Complexity +
+                   turf_algae +
+                   total_macroalgae +
+                   #total_hard_coral + 
+                   #unconsolidated_subs +
+                   #total_octocoral +
+                   sponge +
+                   (1 | Site_recode),# +
+                    #(1 | Habitat_type) +
+                     #(1 | Aspect_descriptive),
+                 family = negbinomial())
+```
+
+### Prior only model
+
+```{r}
+#| cache: true
+herbs_prior_food_mod <- brm(herbs_form_ab_food,
+                    data = fishab_2,
+                    prior = herb_priors_v2,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+### Fit the model
+
+```{r}
+#| cache: true
+herbs_food_mod <- update(herbs_prior_food_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+#### MCMC diagnostics
+
+```{r}
+# trace
+herbs_food_mod |> mcmc_plot(type = "trace")
+# autocorr
+herbs_food_mod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+herbs_food_mod |> mcmc_plot(type = "rhat_hist")
+
+# ess
+herbs_food_mod |> mcmc_plot(type = "neff_hist")
+```
+
+#### Residuals
+
+```{r}
+herbs_resid_food_mod <- make_brms_dharma_res(herbs_food_mod)
+
+# qqplot
+herbs_resid_food_mod |> testUniformity()
+
+# residplot
+herbs_resid_food_mod |> plotResiduals()
+
+# testdisp
+herbs_resid_food_mod |> testDispersion()
+```
+
+##### Save ab food model
+
+```{r}
+save(herbs_food_mod, file = "Model_Output/herbs_food_mod_ver2.Rdata")
+```
+
+# CROPPER
+
+## HABITAT MODEL
+
+### Def formula
+
+```{r}
+crop_form_hab <- bf(cropper ~ 
+                   Benthic_Complexity +
+                   #turf_algae +
+                   #total_macroalgae +
+                   total_hard_coral + 
+                   unconsolidated_subs +
+                   total_octocoral +
+                   #sponge + 
+                   (1 | Site_recode),# +
+                     #(1 | Habitat_type) +
+                     #(1 | Aspect_descriptive),
+                 family = negbinomial())
+```
+
+### Weakly informed priors
+
+```{r}
+crop_priors <- prior(normal(0.7, 1), class = "Intercept") +
+  prior(normal(0, 0.7), class = "b") +
+  prior(gamma(0.01, 0.01), class = "shape") +
+  prior(student_t(3, 0, 1), class = "sd")
+```
+
+### Prior only model
+
+```{r}
+#| cache: true
+crop_prior_hab_mod <- brm(crop_form_hab,
+                    data = fishab_2,
+                    prior = crop_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+### Fit the model
+
+```{r}
+#| cache: true
+crop_mod_ab_hab <- update(crop_prior_hab_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+#### MCMC diagnostics
+
+```{r}
+# trace
+crop_mod_ab_hab |> mcmc_plot(type = "trace")
+# autocorr
+crop_mod_ab_hab |> mcmc_plot(type = "acf_bar")
+
+# rhat
+crop_mod_ab_hab |> mcmc_plot(type = "rhat_hist")
+
+# ess
+crop_mod_ab_hab |> mcmc_plot(type = "neff_hist")
+```
+
+#### Residuals
+
+```{r}
+crop_resids_ab_hab <- make_brms_dharma_res(crop_mod_ab_hab)
+
+# qqplot
+crop_resids_ab_hab |> testUniformity()
+
+# residplot
+crop_resids_ab_hab |> plotResiduals()
+
+# testdisp
+crop_resids_ab_hab |> testDispersion()
+```
+
+#### Save crop ab hab model
+
+```{r}
+save(crop_mod_ab_hab, file = "Model_Output/crop_mod_ab_hab_ver2.Rdata")
+```
+
+## FOOD MODEL
+
+### Def formula
+
+```{r}
+crop_form_food <- bf(cropper ~ 
+              #     Benthic_Complexity +
+                   turf_algae +
+                   total_macroalgae +
+              #     total_hard_coral + 
+               #    unconsolidated_subs +
+               #    total_octocoral +
+                   sponge + 
+                   (1 | Site_recode),# +
+                #(1 | Habitat_type) +
+                #(1 | Aspect_descriptive),
+                 family = negbinomial())
+```
+
+### Prior only model
+
+```{r}
+#| cache: true
+crop_prior_food_mod <- brm(crop_form_food,
+                    data = fishab_2,
+                    prior = crop_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+### Fit the model
+
+```{r}
+#| cache: true
+crop_food_mod <- update(crop_prior_food_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+#### MCMC diagnostics
+
+```{r}
+# trace
+crop_food_mod |> mcmc_plot(type = "trace")
+# autocorr
+crop_food_mod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+crop_food_mod |> mcmc_plot(type = "rhat_hist")
+
+# ess
+crop_food_mod |> mcmc_plot(type = "neff_hist")
+```
+
+#### Residuals
+
+```{r}
+crop_resids_hab <- make_brms_dharma_res(crop_food_mod)
+
+# qqplot
+crop_resids_hab |> testUniformity()
+
+# residplot
+crop_resids_hab |> plotResiduals()
+
+# testdisp
+crop_resids_hab |> testDispersion()
+```
+
+##### Save crop food model
+
+```{r}
+save(crop_food_mod, file = "Data/crop_food_mod_ver2.Rdata")
+```
+
+# DETRITIVORES
+
+## HABITAT MODEL
+
+### Def formula
+
+```{r}
+det_form_hab <- bf(detritivore ~ 
+                    Benthic_Complexity +
+                   #turf_algae +
+                   #total_macroalgae +
+                   total_hard_coral + 
+                   unconsolidated_subs +
+                   total_octocoral +
+                   #sponge + 
+                   (1 | Site_recode),# +
+                     #(1 | Habitat_type) +
+                     #(1 | Aspect_descriptive),
+                 family = negbinomial())
+```
+
+### Weakly informed priors
+
+```{r}
+det_priors <- prior(normal(0.5, 1), class = "Intercept") +
+  prior(normal(0, 0.5), class = "b") +
+  prior(gamma(0.01, 0.01), class = "shape") +
+  prior(student_t(3, 0, 1), class = "sd")
+```
+
+### Prior only model
+
+```{r}
+#| cache: true
+det_prior_hab_mod <- brm(det_form_hab,
+                    data = fishab_2,
+                    prior = det_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+### Fit the model
+
+```{r}
+#| cache: true
+det_mod_hab <- update(det_prior_hab_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+#### MCMC diagnostics
+
+```{r}
+# trace
+det_mod_hab |> mcmc_plot(type = "trace")
+# autocorr
+det_mod_hab|> mcmc_plot(type = "acf_bar")
+
+# rhat
+det_mod_hab |> mcmc_plot(type = "rhat_hist")
+
+# ess
+det_mod_hab |> mcmc_plot(type = "neff_hist")
+```
+
+#### Residuals
+
+```{r}
+det_resids_hab <- make_brms_dharma_res(det_mod_hab)
+
+# qqplot
+det_resids_hab |> testUniformity()
+
+# residplot
+det_resids_hab |> plotResiduals()
+
+# testdisp
+det_resids_hab |> testDispersion()
+```
+
+##### Save det ab hab model
+
+```{r}
+save(det_mod_hab, file = "Model_Output/det_mod_hab_ver2.Rdata")
+```
+
+# FOOD MODELS
+
+### Def formula
+
+```{r}
+det_form_food <- bf(detritivore ~ 
+           #         Benthic_Complexity +
+                   turf_algae +
+                   total_macroalgae +
+               #    total_hard_coral + 
+            #       unconsolidated_subs +
+                #   total_octocoral +
+                  sponge + 
+                   (1 | Site_recode),# +
+             #(1 | Habitat_type) +
+             #(1 | Aspect_descriptive),
+                 family = negbinomial())
+```
+
+## prior only model
+
+```{r}
+#| cache: true
+det_prior_food_mod <- brm(det_form_food,
+                    data = fishab_2,
+                    prior = det_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+## fit the model
+
+```{r}
+#| cache: true
+det_mod_food <- update(det_prior_food_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+det_mod_food |> mcmc_plot(type = "trace")
+# autocorr
+det_mod_food |> mcmc_plot(type = "acf_bar")
+
+# rhat
+det_mod_food |> mcmc_plot(type = "rhat_hist")
+
+# ess
+det_mod_food |> mcmc_plot(type = "neff_hist")
+```
+
+## residuals
+
+```{r}
+det_food_resids <- make_brms_dharma_res(det_mod_food)
+
+# qqplot
+det_food_resids |> testUniformity()
+
+# residplot
+det_food_resids |> plotResiduals()
+
+# testdisp
+det_food_resids |> testDispersion()
+```
+
+# save det ab food model
+
+```{r}
+save(det_mod_food, file = "Data/det_mod_food_ver2.Rdata")
+```
+
+# SCRAPERS
+
+## HABITAT MODEL
+
+## def formula
+
+```{r}
+scra_form_hab <- bf(scraper ~ 
+                     Benthic_Complexity +
+                   #turf_algae +
+                   #total_macroalgae +
+                   total_hard_coral + 
+                   unconsolidated_subs +
+                   total_octocoral +
+                   #sponge + 
+                   (1 | Site_recode),# +
+                     #(1 | Habitat_type) +
+                     #(1 | Aspect_descriptive),
+                 family = negbinomial())
+```
+
+## weakly informed priors
+
+```{r}
+scra_priors <- prior(normal(0.1, 0.3), class = "Intercept") +
+  prior(normal(0, 0.3), class = "b") +
+  prior(gamma(0.01, 0.01), class = "shape") +
+  prior(student_t(3, 0, 0.3), class = "sd")
+```
+
+## prior only model
+
+```{r}
+#| cache: true
+scra_prior_hab_mod <- brm(scra_form_hab,
+                    data = fishab_2,
+                    prior = scra_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+## fit the model
+
+```{r}
+#| cache: true
+scra_hab_mod <- update(scra_prior_hab_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+scra_hab_mod |> mcmc_plot(type = "trace")
+# autocorr
+scra_hab_mod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+scra_hab_mod  |> mcmc_plot(type = "rhat_hist")
+
+# ess
+scra_hab_mod |> mcmc_plot(type = "neff_hist")
+```
+
+## residuals
+
+```{r}
+scra_hab_resids <- make_brms_dharma_res(scra_hab_mod)
+
+# qqplot
+scra_hab_resids |> testUniformity()
+
+# residplot
+scra_hab_resids |> plotResiduals()
+
+# testdisp
+scra_hab_resids |> testDispersion()
+```
+
+# save det ab food model
+
+```{r}
+save(scra_hab_mod, file = "Data/scra_hab_mod_ver2.Rdata")
+```
+
+# FOOD MODEL
+
+## def formula
+
+```{r}
+scra_form_food <- bf(scraper ~ 
+            #         Benthic_Complexity +
+                   turf_algae +
+                   total_macroalgae +
+              #     total_hard_coral + 
+             #      unconsolidated_subs +
+               #    total_octocoral +
+                   sponge + 
+                   (1 | Site_recode),# +
+              #(1 | Habitat_type) +
+              #(1 | Aspect_descriptive),
+                 family = negbinomial())
+```
+
+## prior only model
+
+```{r}
+#| cache: true
+scra_prior_food_mod <- brm(scra_form_food,
+                    data = fishab_2,
+                    prior = scra_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+## fit the model
+
+```{r}
+#| cache: true
+scra_food_mod <- update(scra_prior_food_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+scra_food_mod |> mcmc_plot(type = "trace")
+# autocorr
+scra_food_mod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+scra_food_mod |> mcmc_plot(type = "rhat_hist")
+
+# ess
+scra_food_mod |> mcmc_plot(type = "neff_hist")
+```
+
+## residuals
+
+```{r}
+scra_food_resids <- make_brms_dharma_res(scra_food_mod)
+
+# qqplot
+scra_food_resids |> testUniformity()
+
+# residplot
+scra_food_resids |> plotResiduals()
+
+# testdisp
+scra_food_resids |> testDispersion()
+```
+
+# save det ab food model
+
+```{r}
+save(scra_food_mod, file = "Data/scra_food_mod_ver2.Rdata")
+```
+
+# =========================
+
+Code form here examines changes in herbivorous fishes with depth
+
+# TOTAL HERBIVORES
+
+## def formula
+
+```{r}
+herbs_form_ab_depth <- bf(total_herbs ~ 
+                   Depth_m +
+                   (1 | Site_recode), #+
+                    #(1 | Habitat_type) +
+                    #(1 | Aspect_descriptive),
+                 family = negbinomial())
+```
+
+## weakly informed priors
+
+```{r}
+herb_depth_priors_v2 <- prior(normal(2.1, 2.3), class = "Intercept") +
+  prior(normal(0, 1), class = "b") +
+  prior(gamma(0.01, 0.01), class = "shape") +
+  prior(student_t(3, 0, 2.3), class = "sd")
+```
+
+## prior only model
+
+```{r}
+#| cache: true
+herbs_prior_ab_depth_mod <- brm(herbs_form_ab_depth,
+                    data = fishab_2,
+                    prior = herb_depth_priors_v2,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+## fit the model
+
+```{r}
+#| cache: true
+herbs_depthmod <- update(herbs_prior_ab_depth_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+herbs_depthmod |> mcmc_plot(type = "trace")
+# autocorr
+herbs_depthmod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+herbs_depthmod |> mcmc_plot(type = "rhat_hist")
+
+# ess
+herbs_depthmod |> mcmc_plot(type = "neff_hist")
+```
+
+## residuals
+
+```{r}
+herbs_depthresids <- make_brms_dharma_res(herbs_depthmod)
+
+# qqplot
+herbs_depthresids |> testUniformity()
+
+# residplot
+herbs_depthresids |> plotResiduals()
+
+# testdisp
+herbs_depthresids |> testDispersion()
+```
+
+# save ab hab model
+
+```{r}
+save(herbs_depthmod, file = "Data/herbs_depthmod_ab_ver2.Rdata")
+```
+
+# CROPPER
+
+## def formula
+
+```{r}
+crop_form_ab_depth <- bf(cropper ~ 
+                   Depth_m +
+                   (1 | Site_recode), #+
+                    #(1 | Habitat_type) +
+                    #(1 | Aspect_descriptive),
+                 family = negbinomial())
+```
+
+## weakly informed priors
+
+```{r}
+crop_depth_priors_v2 <- prior(normal(1.5, 1.7), class = "Intercept") +
+  prior(normal(0, 0.9), class = "b") +
+  prior(gamma(0.01, 0.01), class = "shape") +
+  prior(student_t(3, 0, 1.7), class = "sd")
+```
+
+## prior only model
+
+```{r}
+#| cache: true
+crop_prior_ab_depth_mod <- brm(crop_form_ab_depth,
+                    data = fishab_2,
+                    prior = crop_depth_priors_v2,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+## prior eval
+
+```{r}
+crop_prior_ab_depth_mod |> 
+  conditional_effects() |> 
+  plot(points = TRUE,
+       ask = FALSE,
+       plot = FALSE) |> 
+  wrap_plots() & 
+  scale_y_log10()
+```
+
+## fit the model
+
+```{r}
+#| cache: true
+crops_depthmod <- update(crop_prior_ab_depth_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+crops_depthmod |> mcmc_plot(type = "trace")
+# autocorr
+crops_depthmod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+crops_depthmod |> mcmc_plot(type = "rhat_hist")
+
+# ess
+crops_depthmod |> mcmc_plot(type = "neff_hist")
+```
+
+## residuals
+
+```{r}
+crop_depthresids <- make_brms_dharma_res(crops_depthmod)
+
+# qqplot
+crop_depthresids |> testUniformity()
+
+# residplot
+crop_depthresids |> plotResiduals()
+
+# testdisp
+crop_depthresids |> testDispersion()
+```
+
+# save ab hab model
+
+```{r}
+save(crops_depthmod, file = "Data/crops_depthmod_ab_ver2.Rdata")
+```
+
+# DETRITIVORE
+
+## def formula
+
+```{r}
+det_form_ab_depth <- bf(detritivore ~ 
+                   Depth_m +
+                   (1 | Site_recode), #+
+                    #(1 | Habitat_type) +
+                    #(1 | Aspect_descriptive),
+                 family = negbinomial())
+```
+
+## weakly informed priors
+
+```{r}
+det_depth_priors_v2 <- prior(normal(0.8, 1.4), class = "Intercept") +
+  prior(normal(0, 0.6), class = "b") +
+  prior(gamma(0.01, 0.01), class = "shape") +
+  prior(student_t(3, 0, 1.4), class = "sd")
+```
+
+## prior only model
+
+```{r}
+#| cache: true
+det_prior_ab_depth_mod <- brm(det_form_ab_depth,
+                    data = fishab_2,
+                    prior = det_depth_priors_v2,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+## fit the model
+
+```{r}
+#| cache: true
+det_depthmod <- update(det_prior_ab_depth_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+det_depthmod |> mcmc_plot(type = "trace")
+# autocorr
+det_depthmod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+det_depthmod |> mcmc_plot(type = "rhat_hist")
+
+# ess
+det_depthmod |> mcmc_plot(type = "neff_hist")
+```
+
+## residuals
+
+```{r}
+det_depthresids <- make_brms_dharma_res(det_depthmod)
+
+# qqplot
+det_depthresids |> testUniformity()
+
+# residplot
+det_depthresids |> plotResiduals()
+
+# testdisp
+det_depthresids |> testDispersion()
+```
+
+# save ab hab model
+
+```{r}
+save(det_depthmod, file = "Data/det_depthmod_ab_ver2.Rdata")
+```
+
+# SCRAPER
+
+## def formula
+
+```{r}
+scra_form_ab_depth <- bf(scraper ~ 
+                   Depth_m +
+                   (1 | Site_recode), #+
+                    #(1 | Habitat_type) +
+                    #(1 | Aspect_descriptive),
+                 family = negbinomial())
+```
+
+## weakly informed priors
+
+```{r}
+scra_depth_priors_v2 <- prior(normal(0.2, 1), class = "Intercept") +
+  prior(normal(0, 0.2), class = "b") +
+  prior(gamma(0.01, 0.01), class = "shape") +
+  prior(student_t(3, 0, 1), class = "sd")
+```
+
+## prior only model
+
+```{r}
+#| cache: true
+scra_prior_ab_depth_mod <- brm(scra_form_ab_depth,
+                    data = fishab_2,
+                    prior = scra_depth_priors_v2,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+## prior eval
+
+```{r}
+scra_prior_ab_depth_mod |> 
+  conditional_effects() |> 
+  plot(points = TRUE,
+       ask = FALSE,
+       plot = FALSE) |> 
+  wrap_plots() & 
+  scale_y_log10()
+```
+
+## fit the model
+
+```{r}
+#| cache: true
+scra_depthmod <- update(scra_prior_ab_depth_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+scra_depthmod |> mcmc_plot(type = "trace")
+# autocorr
+scra_depthmod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+scra_depthmod |> mcmc_plot(type = "rhat_hist")
+
+# ess
+scra_depthmod |> mcmc_plot(type = "neff_hist")
+```
+
+## residuals
+
+```{r}
+scra_depthresids <- make_brms_dharma_res(scra_depthmod)
+
+# qqplot
+scra_depthresids |> testUniformity()
+
+# residplot
+scra_depthresids |> plotResiduals()
+
+# testdisp
+scra_depthresids |> testDispersion()
+```
+
+# save ab hab model
+
+```{r}
+save(scra_depthmod, file = "Data/scra_depthmod_ab_ver2.Rdata")
+```

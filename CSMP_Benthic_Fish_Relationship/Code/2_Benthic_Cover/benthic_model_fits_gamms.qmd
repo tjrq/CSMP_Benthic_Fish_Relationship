@@ -4,7 +4,16 @@ format: html
 editor: visual
 ---
 
-# load library
+```{r}
+rm(list=ls())
+gc()
+```
+
+# Description
+
+This quarto document contains GAMM analysis to examine changes in benthic cover with depth.
+
+# Load library
 
 ```{r}
 #| label: libraries
@@ -44,74 +53,80 @@ library(iNEXT)
 -   rock
 -   unconsolidated_subs
 
+# Upload csv
+
+```{r}
+benthic <- read_csv("Data/db_benthic.csv", trim_ws = TRUE)
+```
+
+# Prepare db
+
 ```{r}
 benthic_v2 <- 
   benthic |>
-  mutate(Site_recode = factor(Site_recode)) |> 
+  mutate(Site_recode = factor(Site_recode),
+         total_octocoral = complex_octocoral + other_octocoral) |> 
   select(Depth,
          Site_recode,
+         Habitat,
+         Aspect_descriptive,
          total_hard_coral,
          total_macroalgae,
          total_octocoral,
          turf_algae,
-         rock,
+         sponge,
          unconsolidated_subs) |> 
   mutate(prop_hc = total_hard_coral / 100,
          prop_ma = total_macroalgae / 100,
          prop_oct = total_octocoral / 100,
          prop_ta = turf_algae / 100,
-         prop_rock = rock / 100,
-         prop_us = unconsolidated_subs / 100)
+         prop_sponge = sponge / 100,
+         prop_us = unconsolidated_subs / 100) |> 
+  filter(Habitat == "outer_reef")
 
-glimpse(benthic_v2)
+#glimpse(benthic_v2)
 ```
 
-# CORAL
+# Coral model
 
-## def formula
+## Def formula
 
 ```{r}
-coral_form <- bf(prop_hc ~ s(Depth) +
-                   (1 | Site_recode),
+coral_form <- bf(prop_hc ~ s(Depth,
+                             bs = "cr",
+                             k = 3) +
+                   (1 | Site_recode) +
+                   (1 | Habitat) +
+                   (1 | Aspect_descriptive),
                  family = zero_inflated_beta())
 ```
 
-## examine data
-
-```{r}
-benthic_v2 |> 
-  summarise(logit(median(prop_hc)),
-            logit(mad(prop_hc)))
-```
-
-```{r}
--2.2/-1.7
-```
-
-## get prio
+## Get priors
 
 ```{r}
 get_prior(coral_form, data = benthic_v2)
 ```
 
--   b, Intercept, phi, sd, sds, zi
+Priors needed
 
-## def prior
+b, Intercept, phi, sd, sds, zi
+
+## Def prior
 
 ```{r}
 coral_prior <- prior(normal(2.2, 1.7), class = "Intercept") +
-  prior(normal(0, 1.3), class = "b") +
-  prior(student_t(3, 0 , 1.7), class = "sds") +
+  prior(normal(0, 20), class = "b") +
+  prior(student_t(3, 0 , 20), class = "sds") +
   prior(student_t(3, 0, 1.7), class = "sd") +
   prior(gamma(0.01, 0.01), class = "phi") +
   prior(beta(1,1), class = "zi")
 ```
 
-## fit full model
+## Fit full model
 
 ```{r}
 #| cache: TRUE
-coral_mod <- brm(coral_form,
+coral_mod <- brms::brm(coral_form,
                 data = benthic_v2,
                 prior = coral_prior,
                 sample_prior = "yes",
@@ -122,7 +137,19 @@ coral_mod <- brm(coral_form,
                 thin = 5, 
                 control = list(adapt_delta = 0.99,
                                  max_treedepth = 20),
-                refresh = 0)
+                refresh = 2000)
+```
+
+# Save HC mod
+
+```{r}
+save(coral_mod, file = "Model_Ouput/coral_mod.Rdata")
+```
+
+### Conditional effects
+
+```{r}
+coral_mod |> conditional_effects() |> plot() 
 ```
 
 ### MCMC diagnostics
@@ -134,58 +161,42 @@ coral_mod |> mcmc_plot(type = "rhat_hist")
 coral_mod |> mcmc_plot(type = "neff_hist")
 ```
 
-### residuals
+### Residuals
 
 ```{r}
 coral_resids <- make_brms_dharma_res(coral_mod)
 
-# qqplot
 coral_resids |> testUniformity()
 coral_resids |> plotResiduals(quantreg = FALSE)
 ```
 
--   Looks good
+# Macroalgae model
 
-### summary
-
-```{r}
-coral_mod |> summary()
-```
-
-# MACROALGAE
-
-## def formula
+## Def formula
 
 ```{r}
-ma_form <- bf(prop_ma ~ s(Depth) +
-                   (1 | Site_recode),
+ma_form <- bf(prop_ma ~ s(Depth,
+                          bs = "cr",
+                          k = 3) +
+                    (1 | Site_recode) +
+                   (1 | Habitat) +
+                   (1 | Aspect_descriptive),
                  family = zero_inflated_beta())
 ```
 
-## examine data
 
-```{r}
-benthic_v2 |> 
-  summarise(logit(median(prop_ma)),
-            logit(mad(prop_ma)))
-```
-
-```{r}
-1.8/1.4
-```
-
-## def prior
+## Def prior
 
 ```{r}
 ma_prior <- prior(normal(1.8, 1.4), class = "Intercept") +
-  prior(normal(0, 1.3), class = "b") +
-  prior(student_t(3, 0 , 1.4), class = "sds") +
+  prior(normal(0, 15), class = "b") +
+  prior(student_t(3, 0 , 15), class = "sds") +
   prior(student_t(3, 0, 1.4), class = "sd") +
   prior(gamma(0.01, 0.01), class = "phi") +
   prior(beta(1,1), class = "zi")
 ```
 
-## fit full model
+## Fit full model
 
 ```{r}
 #| cache: TRUE
@@ -200,7 +211,19 @@ ma_mod <- brm(ma_form,
                 thin = 5, 
                 control = list(adapt_delta = 0.99,
                                  max_treedepth = 20),
-                refresh = 0)
+                refresh = 2000)
+```
+
+## Save MA model
+
+```{r}
+save(ma_mod, file = "Model_Ouput/ma_mod.Rdata")
+```
+
+### Conditional effects
+
+```{r}
+ma_mod |> conditional_effects() |> plot() 
 ```
 
 ### MCMC diagnostics
@@ -212,7 +235,7 @@ ma_mod |> mcmc_plot(type = "rhat_hist")
 ma_mod |> mcmc_plot(type = "neff_hist")
 ```
 
-### residuals
+### Residuals
 
 ```{r}
 ma_resids <- make_brms_dharma_res(ma_mod)
@@ -221,40 +244,33 @@ ma_resids |> testUniformity()
 ma_resids |> plotResiduals(quantreg = FALSE)
 ```
 
-# TURF ALGAE
+# TURFS
 
-## def formula
+## Def formula
 
 ```{r}
-ta_form <- bf(prop_ta ~ s(Depth) +
-                   (1 | Site_recode),
+ta_form <- bf(prop_ta ~ s(Depth,
+                          bs = "cr",
+                          k = 3) +
+                   (1 | Site_recode) +
+                   (1 | Habitat) +
+                   (1 | Aspect_descriptive),
                  family = zero_inflated_beta())
 ```
 
-## examine data
 
-```{r}
-benthic_v2 |> 
-  summarise(logit(median(prop_ta)),
-            logit(mad(prop_ta)))
-```
-
-```{r}
-2.6/2.2
-```
-
-## def prior
+## Def prior
 
 ```{r}
 ta_prior <- prior(normal(2.6, 2.2), class = "Intercept") +
-  prior(normal(0, 1.2), class = "b") +
-  prior(student_t(3, 0 , 2.2), class = "sds") +
+  prior(normal(0, 22), class = "b") +
+  prior(student_t(3, 0 , 22), class = "sds") +
   prior(student_t(3, 0, 2.2), class = "sd") +
   prior(gamma(0.01, 0.01), class = "phi") +
   prior(beta(1,1), class = "zi")
 ```
 
-## fit full model
+## Fit full model
 
 ```{r}
 #| cache: TRUE
@@ -269,7 +285,19 @@ ta_mod <- brm(ta_form,
                 thin = 5, 
                 control = list(adapt_delta = 0.99,
                                  max_treedepth = 20),
-                refresh = 0)
+                refresh = 2000)
+```
+
+## Save TA model
+
+```{r}
+save(ta_mod, file = "Data/ta_mod.Rdata")
+```
+
+### Conditional effects
+
+```{r}
+ta_mod |> conditional_effects() |> plot(points = TRUE) 
 ```
 
 ### MCMC diagnostics
@@ -281,7 +309,7 @@ ta_mod |> mcmc_plot(type = "rhat_hist")
 ta_mod |> mcmc_plot(type = "neff_hist")
 ```
 
-### residuals
+### Residuals
 
 ```{r}
 ta_resids <- make_brms_dharma_res(ta_mod)
@@ -292,38 +320,31 @@ ta_resids |> plotResiduals(quantreg = FALSE)
 
 # OCTOCORAL
 
-## def formula
+## Def formula
 
 ```{r}
-oct_form <- bf(prop_oct ~ s(Depth) +
-                   (1 | Site_recode),
+oct_form <- bf(prop_oct ~ s(Depth,
+                            bs = "cr",
+                            k = 3) +
+                   (1 | Site_recode), #+
+                   #(1 | Habitat) +
+                   #(1 | Aspect_descriptive),
                  family = zero_inflated_beta())
 ```
 
-## examine data
 
-```{r}
-benthic_v2 |> 
-  summarise(logit(median(prop_oct)),
-            logit(mad(prop_oct)))
-```
-
-```{r}
-2.5/2
-```
-
-## def prior
+## Def prior
 
 ```{r}
 oct_prior <- prior(normal(2.5, 2), class = "Intercept") +
-  prior(normal(0, 1.2), class = "b") +
-  prior(student_t(3, 0 , 2), class = "sds") +
+  prior(normal(0, 20), class = "b") +
+  prior(student_t(3, 0 , 20), class = "sds") +
   prior(student_t(3, 0, 2), class = "sd") +
   prior(gamma(0.01, 0.01), class = "phi") +
   prior(beta(1,1), class = "zi")
 ```
 
-## fit full model
+## Fit full model
 
 ```{r}
 #| cache: TRUE
@@ -338,7 +359,19 @@ oct_mod <- brm(oct_form,
                 thin = 5, 
                 control = list(adapt_delta = 0.99,
                                  max_treedepth = 20),
-                refresh = 0)
+                refresh = 2000)
+```
+
+## Save oct model
+
+```{r}
+save(oct_mod, file = "Model_Output/oct_mod.Rdata")
+```
+
+### Conditional effects
+
+```{r}
+oct_mod |> conditional_effects() |> plot(points = TRUE) 
 ```
 
 ### MCMC diagnostics
@@ -350,7 +383,7 @@ oct_mod |> mcmc_plot(type = "rhat_hist")
 oct_mod |> mcmc_plot(type = "neff_hist")
 ```
 
-### residuals
+### Residuals
 
 ```{r}
 oct_resids <- make_brms_dharma_res(oct_mod)
@@ -359,11 +392,163 @@ oct_resids |> testUniformity()
 oct_resids |> plotResiduals(quantreg = FALSE)
 ```
 
+# UNCONSOLIDATED SUBSTRATE
+
+## Def formula
+
+```{r}
+us_form <- bf(prop_us ~ s(Depth,
+                          bs = "cr",
+                          k = 3) +
+                   (1 | Site_recode) +
+                   (1 | Habitat) +
+                   (1 | Aspect_descriptive),
+                 family = zero_one_inflated_beta())
+```
+
+## Get prior
+
+```{r}
+get_prior(us_form, data = benthic_v2)
+```
+
+## Def prior
+
+```{r}
+us_prior <- prior(normal(1.9, 1.4), class = "Intercept") +
+  prior(normal(0, 14), class = "b") +
+  prior(student_t(3, 0 , 14), class = "sds") +
+  prior(student_t(3, 0, 1.4), class = "sd") +
+  prior(gamma(0.01, 0.01), class = "phi") +
+  prior(beta(1, 1), class = "coi") +
+  prior(beta(1, 1), class = "zoi")
+```
+
+## Fit full model
+
+```{r}
+#| cache: TRUE
+us_mod <- brm(us_form,
+                data = benthic_v2,
+                prior = us_prior,
+                sample_prior = "yes",
+                iter = 10000,
+                warmup = 2000,
+                chains = 3, 
+                cores = 6,
+                thin = 5, 
+                control = list(adapt_delta = 0.99,
+                                 max_treedepth = 20),
+                refresh = 2000)
+```
+
+## Save us model
+
+```{r}
+save(us_mod, file = "Model_Output/us_mod.Rdata")
+```
+
+### Conditional effects
+
+```{r}
+us_mod |> conditional_effects() |> plot() 
+```
+
+### MCMC diagnostics
+
+```{r}
+us_mod |> mcmc_plot(type = "trace")
+us_mod |> mcmc_plot(type = "acf_bar")
+us_mod |> mcmc_plot(type = "rhat_hist")
+us_mod |> mcmc_plot(type = "neff_hist")
+```
+
+### Residuals
+
+```{r}
+us_resids <- make_brms_dharma_res(us_mod)
+
+us_resids |> testUniformity()
+us_resids |> plotResiduals(quantreg = FALSE)
+```
+
+# SPONGE
+
+## Def formula
+
+```{r}
+sp_form <- bf(prop_sponge ~ s(Depth,
+                            bs = "cr",
+                            k = 3) +
+                   (1 | Site_recode) +
+                   (1 | Habitat) +
+                   (1 | Aspect_descriptive),
+                 family = zero_inflated_beta())
+```
+
+
+## Def prior
+
+```{r}
+sp_prior <- prior(normal(4.2, 3.8), class = "Intercept") + 
+  prior(normal(0, 1.1), class = "b") + # still need to optimize this
+  prior(student_t(3, 0, 1.1), class = "sds") +
+  prior(student_t(3, 0, 3.8), class = "sd") +
+  prior(gamma(0.01, 0.01), class = "phi") +
+  prior(beta(1,1), class = "zi")
+```
+
+## Fit model
+
+```{r}
+#| cache: TRUE
+sp_mod <- brm(sp_form,
+                data = benthic_v2,
+                prior = sp_prior,
+                sample_prior = "yes",
+                iter = 10000,
+                warmup = 2000,
+                chains = 3, 
+                cores = 6,
+                thin = 5, 
+                control = list(adapt_delta = 0.99,
+                                 max_treedepth = 20),
+                refresh = 2000)
+```
+
+## Save model
+
+```{r}
+save(sp_mod, file = "Model_Output/sp_mod.Rdata")
+```
+
+### Conditional effects
+
+```{r}
+sp_mod |> conditional_effects() |> plot() 
+```
+
+### MCMC diagnostics
+
+```{r}
+sp_mod |> mcmc_plot(type = "trace")
+sp_mod |> mcmc_plot(type = "acf_bar")
+sp_mod|> mcmc_plot(type = "rhat_hist")
+sp_mod |> mcmc_plot(type = "neff_hist")
+```
+
+### Residuals
+
+```{r}
+sp_resids <- make_brms_dharma_res(sp_mod)
+
+sp_resids |> testUniformity()
+sp_resids |> plotResiduals(quantreg = FALSE)
+```
+
 # ROCK
 
-rock
-
-## def formula
+## Def formula
 
 ```{r}
 rock_form <- bf(prop_rock ~ s(Depth) +
@@ -371,19 +556,8 @@ rock_form <- bf(prop_rock ~ s(Depth) +
                  family = zero_inflated_beta())
 ```
 
-## examine data
 
-```{r}
-benthic_v2 |> 
-  summarise(logit(median(prop_rock)),
-            logit(mad(prop_rock)))
-```
-
-```{r}
-3/2.5
-```
-
-## def prior
+## Def prior
 
 ```{r}
 rock_prior <- prior(normal(3, 2.5), class = "Intercept") +
@@ -394,7 +568,7 @@ rock_prior <- prior(normal(3, 2.5), class = "Intercept") +
   prior(beta(1,1), class = "zi")
 ```
 
-## fit full model
+## Fit full model
 
 ```{r}
 #| cache: TRUE
@@ -421,87 +595,11 @@ rock_mod |> mcmc_plot(type = "rhat_hist")
 rock_mod |> mcmc_plot(type = "neff_hist")
 ```
 
-### residuals
+### Residuals
 
 ```{r}
 rock_resids <- make_brms_dharma_res(rock_mod)
 
 rock_resids |> testUniformity()
 rock_resids |> plotResiduals(quantreg = FALSE)
-```
-
-# UNCONSOLIDATED SUBSTRATE
-
-## def formula
-
-```{r}
-us_form <- bf(prop_us ~ s(Depth) +
-                   (1 | Site_recode),
-                 family = zero_one_inflated_beta())
-```
-
-## examine data
-
-```{r}
-benthic_v2 |> 
-  summarise(logit(median(prop_us)),
-            logit(mad(prop_us)))
-```
-
-```{r}
-1.9/1.4
-```
-
-## get prior
-
-```{r}
-get_prior(us_form, data = benthic_v2)
-```
-
-## def prior
-
-```{r}
-us_prior <- prior(normal(1.9, 1.4), class = "Intercept") +
-  prior(normal(0, 1.3), class = "b") +
-  prior(student_t(3, 0 , 1.4), class = "sds") +
-  prior(student_t(3, 0, 1.4), class = "sd") +
-  prior(gamma(0.01, 0.01), class = "phi") +
-  prior(beta(1, 1), class = "coi") +
-  prior(beta(1, 1), class = "zoi")
-```
-
-## fit full model
-
-```{r}
-#| cache: TRUE
-us_mod <- brm(us_form,
-                data = benthic_v2,
-                prior = us_prior,
-                sample_prior = "yes",
-                iter = 10000,
-                warmup = 2000,
-                chains = 3, 
-                cores = 6,
-                thin = 5, 
-                control = list(adapt_delta = 0.99,
-                                 max_treedepth = 20),
-                refresh = 0)
-```
-
-### MCMC diagnostics
-
-```{r}
-us_mod |> mcmc_plot(type = "trace")
-us_mod |> mcmc_plot(type = "acf_bar")
-us_mod |> mcmc_plot(type = "rhat_hist")
-us_mod |> mcmc_plot(type = "neff_hist")
-```
-
-### residuals
-
-```{r}
-us_resids <- make_brms_dharma_res(us_mod)
-
-us_resids |> testUniformity()
-us_resids |> plotResiduals(quantreg = FALSE)
 ```

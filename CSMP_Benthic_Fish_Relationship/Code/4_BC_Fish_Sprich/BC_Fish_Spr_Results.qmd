@@ -1,0 +1,367 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+# Description
+
+This qmd file contains code for the generation of figures and interpretation of models
+
+# Cleanup
+
+```{r}
+rm(list=ls())
+gc()
+```
+
+# Load custom functions
+
+```{r}
+source("helperFunctions.R")
+```
+
+# Load models
+
+```{r}
+load("Model_Outputs/herbs_sp_hab_mod.Rdata")
+load("Model_Outputs/herbs_sp_food_mod.Rdata")
+```
+
+## Summary table: habitat x species richness
+
+```{r}
+herbs_sp_hab_mod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  filter(Pl > 0.85 |
+          Pg > 0.85)
+```
+
+## Summary table: food x species richness
+
+```{r}
+herbs_sp_food_mod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  filter(Pl > 0.85 |
+          Pg > 0.85)
+```
+
+# Figures
+
+# HARD CORAL
+
+### New data: hard coral
+
+```{r}
+hc_sp_newdata <- with(sprich_v2,
+                         data.frame(total_hard_coral = seq(min(total_hard_coral),
+                                          max(total_hard_coral),
+                                          length = 100)))
+```
+
+## Emmeans
+
+```{r}
+sp_hc_em <- 
+  herbs_sp_hab_mod |> 
+  emmeans(~ total_hard_coral,
+          at = hc_sp_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+## Gather emmeans
+
+```{r}
+sp_hc_em_draws <- 
+gather_emmeans_draws(sp_hc_em)
+```
+
+## Subset 200 draws
+
+```{r}
+sp_hc_draw_subset <- sample(unique(sp_hc_em_draws$.draw), 200)
+
+sp_hc_em_draws_200 <- sp_hc_em_draws  |>  
+  filter(.draw %in% sp_hc_draw_subset)
+```
+
+## Plot: hard coral
+
+```{r}
+p_sp_hc <-
+sp_hc_em_draws_200 |> 
+  ggplot(aes(x = total_hard_coral, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#DDD487", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "yellow4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "yellow4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(expression(Richness~(species.150m^-2)),
+                       limits = c(0, 40),
+  breaks = seq(0, 40, by = 10)) +
+  scale_x_continuous(name = "",
+                     breaks = seq(0, 100, by = 25)) +
+  theme_classic() +
+  ggtitle("b) Hard coral") +
+  scale_x_continuous(name = "Hard coral cover (%)") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        #axis.ticks = element_blank(),
+        axis.title.y =  element_blank(),
+        axis.text.y =  element_blank(),
+        plot.title = element_text(size = 18))
+```
+
+## Plot: hard coral (with images)
+
+```{r}
+p_sp_hc <-
+p_sp_hc + 
+  geom_image(data = tibble(total_hard_coral = 10,
+                          .value = 35),
+             aes(image = ("Images/HC_Sil.png")),
+             size = 0.35) +
+  geom_image(data = tibble(total_hard_coral = 25,
+                           .value = 38),
+             aes(image = ("Images/siganid.png")),
+             size = 0.15) +
+  geom_image(data = tibble(total_hard_coral = 25,
+                           .value = 34),
+             aes(image = ("Images/ctenochaetus.png")),
+             size = 0.15) +
+  geom_image(data = tibble(total_hard_coral = 25,
+                           .value = 30),
+             aes(image = ("Images/scarus.png")),
+             size = 0.15)
+```
+
+### OCTOCORAL
+
+## Newdata: Octocoral
+
+```{r}
+oct_sp_newdata <- with(sprich_v2,
+                         data.frame(total_octocoral = seq(min(total_octocoral),
+                                          max(total_octocoral),
+                                          length = 100)))
+```
+
+## Emmeans
+
+```{r}
+sp_oct_em <- 
+  herbs_sp_hab_mod |> 
+  emmeans(~ total_octocoral,
+          at = oct_sp_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+## Gather emmeans
+
+```{r}
+sp_oct_em_draws <- 
+gather_emmeans_draws(sp_oct_em)
+```
+
+## Subset 200 draws
+
+```{r}
+sp_oct_draw_subset <- sample(unique(sp_oct_em_draws$.draw), 200)
+
+sp_oct_em_draws_200 <- sp_oct_em_draws  |>  
+  filter(.draw %in% sp_oct_draw_subset)
+```
+
+## Plot: Octocoral
+
+```{r}
+p_sp_oct <-
+sp_oct_em_draws_200 |> 
+  ggplot(aes(x = total_octocoral, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#BFB59E", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkorange4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkorange4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(expression(Richness~(species.150m^-2)),
+                       limits = c(0, 40),
+  breaks = seq(0, 40, by = 10)) +
+  scale_x_continuous(name = "",
+                     breaks = seq(0, 40, by = 10)) +
+  theme_classic() +
+  ggtitle("a) Octocoral") +
+  #scale_x_continuous(name = "Octocoral cover (%)") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x =element_blank(),
+        #axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 15),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 18))  #+
+  #ggtitle("Species richness")
+```
+
+## Plot: Octocoral (with images)
+
+```{r}
+p_sp_oct <-
+p_sp_oct + 
+  geom_image(data = tibble(total_octocoral = 5,
+                          .value = 33),
+             aes(image = ("Images/Octo_Sil.png")),
+             size = 0.35) +
+  geom_image(data = tibble(total_octocoral = 12,
+                           .value = 38),
+             aes(image = ("Images/siganid.png")),
+             size = 0.15) +
+  geom_image(data = tibble(total_octocoral = 12,
+                           .value = 34),
+             aes(image = ("Images/ctenochaetus.png")),
+             size = 0.15) +
+  geom_image(data = tibble(total_octocoral = 12,
+                           .value = 30),
+             aes(image = ("Images/scarus.png")),
+             size = 0.15)
+
+print(p_sp_oct)
+```
+
+# COMBINE FIGS
+
+```{r}
+p_total_sp_ab <- 
+(p_sp_oct + p_sp_hc) /
+  (p_thab_oct + p_ab_ta) /
+  (p_th_ab_ma + p_thab_bc) +
+  theme(
+    plot.title = element_text(size = 15, hjust = 0)
+  )
+```
+
+# ggsave
+
+```{r}
+ggsave("Figures/p_total_sp_ab_ver2.jpeg",
+       plot =p_total_sp_ab, 
+       dpi = 600, 
+       height = 11, 
+       width = 9, 
+       units = "in")
+```
+
+# ==================
+
+# Description
+
+Below this line are R code that generated figures and interpreted model outputs for species richness and how this changes with depth
+
+# Load model
+
+```{r}
+load("Model_Outputs/herbs_fishspecies_depth_mod.Rdata")
+```
+
+## Summary table: depth
+
+```{r}
+herbs_fishsp_mod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  filter(Pl > 0.85 |
+          Pg > 0.85)
+```
+
+## Newdata: species richness
+
+```{r}
+depthsp_newdata <- with(sprich_v2,
+                      data.frame(Depth = seq(min(Depth),
+                                             max(Depth),
+                                             length = 100)))
+```
+
+## Emmeans
+
+```{r}
+fishsp_em <- 
+  herbs_fishsp_mod |> 
+  emmeans(~ Depth,
+          at = depthsp_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+## Gather emmeans
+
+```{r}
+fish_em_draws <- 
+gather_emmeans_draws(fishsp_em)
+```
+
+## Subset 200 draws
+
+```{r}
+fishsp_draw_subset <- sample(unique(fish_em_draws$.draw), 200)
+
+fishsp_em_draws_200 <- fish_em_draws  |>  
+  filter(.draw %in% fishsp_draw_subset)
+```
+
+## Plot: depth
+
+```{r}
+p1_depth_spr <- 
+fishsp_em_draws_200 |> 
+  ggplot(aes(x = Depth, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#8AA17D", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkgreen", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkgreen", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(expression(Richness~(species.150m^-2)),
+                     limits = c(0,30),
+                     breaks = seq(0, 30, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "") +
+  ggtitle("Herbivore richness") +
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        #axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 15),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 18))
+```

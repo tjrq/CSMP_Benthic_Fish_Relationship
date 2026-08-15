@@ -1,0 +1,2332 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+# Overall description
+
+This R quarto document contains code for figure generation and model interpretation for the relationships between benthic cover and herbivorous fishes abundance (overall and for each feeding group). Additionally, figures for changes in herbivorous fishes and for each feeding group with depth are also included.
+
+# Clean up
+```{r}
+rm(list=ls())
+gc()
+```
+
+# =================
+
+# Description
+
+Below this line are R codes for interpreting and plotting the relationships between herbivorous fishes (overall and for each feeding) and benthic categories
+
+# LOAD total herbivore models
+
+```{r}
+load("Model_Output/herbs_mod_ab_hab_ver2.Rdata")
+load("Model_Output/herbs_food_mod_ver2.Rdata")
+```
+
+## Summary tables
+
+# Food model
+
+```{r}
+herbs_food_mod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  filter(Pl > 0.85 |
+          Pg > 0.85)
+```
+
+# Habitat model
+
+```{r}
+herbs_mod_ab_hab |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  filter(Pl > 0.85 |
+          Pg > 0.85)
+```
+
+# LOAD cropper models
+
+```{r}
+load("Model_Output/crop_mod_ab_hab_ver2.Rdata")
+load("Model_Output/crop_food_mod_ver2.Rdata")
+```
+
+## Summary tables
+
+### Food model
+
+```{r}
+crop_food_mod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  filter(Pl > 0.85 |
+          Pg > 0.85)
+```
+
+### Habitat model
+
+```{r}
+crop_mod_ab_hab |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  filter(Pl > 0.85 |
+         Pg > 0.85)
+```
+
+# LOAD detritivore models
+
+```{r}
+load("Model_Output/det_mod_hab_ver2.Rdata")
+load("Model_Output/det_mod_food_ver2.Rdata")
+```
+
+## Summary tables
+
+### Food model
+
+```{r}
+det_mod_food |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  filter(Pl > 0.85 |
+          Pg > 0.85)
+```
+
+### Habitat model
+
+```{r}
+det_mod_hab |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  filter(Pl > 0.85 |
+          Pg > 0.85)
+```
+
+# LOAD scraper models
+
+```{r}
+load("Model_Output/scra_hab_mod_ver2.Rdata")
+load("Model_Output/scra_food_mod_ver2.Rdata")
+```
+
+## Summary table
+
+### Habitat model
+
+```{r}
+scra_hab_mod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  filter(Pl > 0.85 |
+          Pg > 0.85)
+```
+
+### Food model
+
+```{r}
+scra_food_mod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  filter(Pl > 0.85 |
+          Pg > 0.85)
+```
+
+# Figure generation
+
+## BENTHIC COMPLEXITY (BC)
+
+### Plot: BC x total herbivore
+
+```{r}
+p_thab_bc <-
+herbs_mod_ab_hab |> 
+  emmeans(~ Benthic_Complexity,
+            type = "link") |> 
+  #pairs() |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp = exp(.value)) |> 
+  dplyr::select(-.chain, 
+                -.value,
+                -.iteration) |> 
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  ggplot(aes(x = Benthic_Complexity,
+             y = median)) +
+  geom_pointrange(aes(ymin = lower,
+                      ymax = upper),
+                  shape = 21,
+                  size = 1,
+                  fatten = 3,
+                  color = "black",
+                  fill = "#3C3C3C") +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                       limits = c(0, 20),
+  breaks = seq(0, 20, by = 5)) +
+  scale_x_discrete(name = "Benthic complexity score") +
+  ggtitle("f) Benthic complexity") +
+  #(P = 0.89)") +
+  theme_classic() +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        #axis.ticks = element_blank(),
+        axis.title.x = element_text(size = 15),
+        axis.text.x = element_text(size = 12),
+        plot.title = element_text(size = 18)) 
+```
+
+### Plot: BC x total herbivore (with images)
+
+```{r}
+p_thab_bc <- 
+p_thab_bc +
+  geom_image(data = tibble(Benthic_Complexity = 1.2,
+                           median = 17),
+             aes(image = ("Images/BC_Sil.png")),
+             size = 0.35) +
+  geom_image(data = tibble(Benthic_Complexity = 2.3,
+                           median = 19),
+             aes(image = ("Images/siganid.png")),
+             size = 0.15) +
+  geom_image(data = tibble(Benthic_Complexity = 2.3,
+                           median = 17),
+             aes(image = ("Images/ctenochaetus.png")),
+             size = 0.15) +
+  geom_image(data = tibble(Benthic_Complexity = 2.3,
+                           median = 15),
+             aes(image = ("Images/scarus.png")),
+             size = 0.15)
+
+print(p_thab_bc)
+```
+
+#### Pairs: total herbivores
+
+```{r}
+herbs_mod_ab_hab |> 
+  emmeans(~ Benthic_Complexity,
+            type = "link") |> 
+  pairs() |> 
+  gather_emmeans_draws() |> # odds-ratio
+  mutate(.value = exp(.value)) |> # log odds-ratio  
+  summarise(median_hdci(.value),
+            Pl = mean(.value < 1),
+            Pg = mean(.value > 1)) |> 
+  filter(Pl > 0.85 | Pg > 0.85)
+```
+
+### Plot: BC x cropper
+
+```{r}
+p_crop_bc <-
+crop_mod_ab_hab |> 
+  emmeans(~ Benthic_Complexity,
+            type = "link") |> 
+  #pairs() |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp = exp(.value)) |> 
+  dplyr::select(-.chain, 
+                -.value,
+                -.iteration) |> 
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  ggplot(aes(x = Benthic_Complexity,
+             y = median)) +
+  geom_pointrange(aes(ymin = lower,
+                      ymax = upper),
+                  shape = 21,
+                  size = 1,
+                  fatten = 3,
+                  color = "black",
+                  fill = "#3C3C3C") +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                       limits = c(0, 20),
+  breaks = seq(0, 20, by = 5)) +
+  scale_x_discrete(name = "Benthic complexity score") +
+  ggtitle("c) Croppers x Benthic complexity") +
+  theme_classic() +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        #axis.ticks.y = element_blank(),
+        axis.title.x = element_text(size = 15),
+        axis.text.x = element_text(size = 12),
+        plot.title = element_text(size = 18)) 
+```
+
+### Plot: BC x cropper (with images)
+
+```{r}
+p_crop_bc <-
+p_crop_bc +
+  geom_image(data = tibble(Benthic_Complexity = 1.2,
+                           median = 17),
+             aes(image = ("Images/BC_Sil.png")),
+             size = 0.2) +
+  geom_image(data = tibble(Benthic_Complexity = 1.2,
+                           median = 12),
+             aes(image = ("Images/siganid.png")),
+             size = 0.2)
+
+print(p_crop_bc)
+```
+
+### Plot: BC x detritivore
+
+No images were attached as no evidence to suggestion relationship between BC and detritivore abundance
+
+```{r}
+p_det_bc <-
+det_mod_hab |> 
+  emmeans(~ Benthic_Complexity,
+            type = "link") |> 
+  #pairs() |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp = exp(.value)) |> 
+  dplyr::select(-.chain, 
+                -.value,
+                -.iteration) |> 
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  ggplot(aes(x = Benthic_Complexity,
+             y = median)) +
+  geom_pointrange(aes(ymin = lower,
+                      ymax = upper),
+                  shape = 21,
+                  size = 1,
+                  fatten = 3,
+                  color = "black",
+                  fill = "#3C3C3C") +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                       limits = c(0, 20),
+  breaks = seq(0, 20, by = 5)) +
+  scale_x_discrete(name = "Score") +
+  ggtitle("Detritivores") +
+  theme_classic() +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.x = element_text(size = 15),
+        axis.text.x = element_text(size = 12),
+        plot.title = element_text(size = 18)) 
+```
+
+### Plot: BC x scraper
+
+No images were attached as no evidence to suggestion relationship between BC and scraper abundance
+
+```{r}
+p_scra_bc <-
+scra_hab_mod |> 
+  emmeans(~ Benthic_Complexity,
+            type = "link") |> 
+  #pairs() |> 
+  gather_emmeans_draws() |> 
+  mutate(Exp = exp(.value)) |> 
+  dplyr::select(-.chain, 
+                -.value,
+                -.iteration) |> 
+  summarise_draws(median,
+                  HDInterval::hdi,
+                  rhat,
+                  Pl = ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  ggplot(aes(x = Benthic_Complexity,
+             y = median)) +
+  geom_pointrange(aes(ymin = lower,
+                      ymax = upper),
+                  shape = 21,
+                  size = 1,
+                  fatten = 3,
+                  color = "black",
+                  fill = "#3C3C3C") +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                       limits = c(0, 20),
+  breaks = seq(0, 20, by = 5)) +
+  scale_x_discrete(name = "Score") +
+  ggtitle("Scrapers") +
+  theme_classic() +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.x = element_text(size = 15),
+        axis.text.x = element_text(size = 12),
+        plot.title = element_text(size = 18)) +
+  annotate("text", 
+           x = 4.5, 
+           y = 12, 
+           label = "Benthic complexity", 
+           angle = 90,
+           hjust = 0.5)
+```
+
+## HARD CORAL
+
+### HC: newdata
+
+```{r}
+hc_ab_newdata <- with(fishab_2,
+                         data.frame(total_hard_coral = seq(min(total_hard_coral),
+                                          max(total_hard_coral),
+                                          length = 100)))
+```
+
+### Emmeans: HC x total herbivores
+
+```{r}
+th_ab_hc <- 
+  herbs_mod_ab_hab |> 
+  emmeans(~ total_hard_coral,
+          at = hc_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+#### Gather emmeans
+
+```{r}
+th_ab_hc_draws <- 
+gather_emmeans_draws(th_ab_hc)
+```
+
+#### Subset 200 draws
+
+```{r}
+th_ab_hc_draws_subset <- sample(unique(th_ab_hc_draws$.draw), 200)
+
+th_ab_hc_draws_200 <- th_ab_hc_draws  |>  
+  filter(.draw %in% th_ab_hc_draws_subset)
+```
+
+#### Plot: HC x total herbivores
+
+```{r}
+p_thab_hc <- 
+th_ab_hc_draws_200 |> 
+  ggplot(aes(x = total_hard_coral, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#DDD487", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "yellow4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "yellow4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "",
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "") +
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 15),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 18)) #+
+  #ggtitle("Croppers")
+```
+
+### HC x croppers
+
+#### Emmeans: HC x croppers
+
+```{r}
+crop_ab_hc <- 
+  crop_mod_ab_hab |> 
+  emmeans(~ total_hard_coral,
+          at = hc_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+#### Gather emmeans
+
+```{r}
+crop_ab_hc_draws <- 
+gather_emmeans_draws(crop_ab_hc)
+```
+
+#### Subset 200 draws
+
+```{r}
+crop_ab_hc_draws_subset <- sample(unique(crop_ab_hc_draws$.draw), 200)
+
+cro_ab_hc_draws_200 <- crop_ab_hc_draws  |>  
+  filter(.draw %in% crop_ab_hc_draws_subset)
+```
+
+#### Plot: HC x croppers
+
+```{r}
+p_cropab_hc <- 
+cro_ab_hc_draws_200 |> 
+  ggplot(aes(x = total_hard_coral, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#DDD487", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "yellow4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "yellow4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  labs(
+    title = "Croppers",        # bigger top title
+    subtitle = "Hard coral"     # main plot title
+  ) +
+  scale_x_continuous(name = "") +
+  theme_classic() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.title.y = element_text(size = 15),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 22),
+    plot.subtitle = element_text(size = 18)
+  )
+  
+```
+
+### HC x detritivores
+
+#### Emmeans: HC x detritivores
+
+```{r}
+det_ab_hc <- 
+  det_mod_hab |> 
+  emmeans(~ total_hard_coral,
+          at = hc_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+#### Gather emmeans
+
+```{r}
+det_ab_hc_draws <- 
+gather_emmeans_draws(det_ab_hc)
+```
+
+#### Subset 200 draws
+
+```{r}
+det_ab_hc_draws_subset <- sample(unique(det_ab_hc_draws$.draw), 200)
+
+det_ab_hc_draws_200 <- det_ab_hc_draws  |>  
+  filter(.draw %in% det_ab_hc_draws_subset)
+```
+
+#### Plot: HC x detritivores 
+
+```{r}
+p_detab_hc <- 
+det_ab_hc_draws_200 |> 
+  ggplot(aes(x = total_hard_coral, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#DDD487", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "yellow4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "yellow4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "",
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "") +
+  theme_classic() +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        plot.title = element_blank(),
+        axis.ticks = element_blank()) #+
+  #ggtitle("Croppers")
+```
+
+### HC x scrapers
+
+#### Emmeans: HC x scrapers
+
+```{r}
+scra_ab_hc <- 
+  scra_hab_mod |> 
+  emmeans(~ total_hard_coral,
+          at = hc_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+#### Gather emmeans
+
+```{r}
+scra_ab_hc_draws <- 
+gather_emmeans_draws(scra_ab_hc)
+```
+
+#### Subset 200 draws
+
+```{r}
+scra_ab_hc_draws_subset <- sample(unique(scra_ab_hc_draws$.draw), 200)
+
+scra_ab_hc_draws_200 <- scra_ab_hc_draws  |>  
+  filter(.draw %in% scra_ab_hc_draws_subset)
+```
+
+#### Plot: HC x scrapers
+
+```{r}
+p_scraab_hc <- 
+scra_ab_hc_draws_200 |> 
+  ggplot(aes(x = total_hard_coral, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#DDD487", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "yellow4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "yellow4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "",
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "") +
+  theme_classic() +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        plot.title = element_blank(),
+        axis.ticks = element_blank()) +
+  annotate("text", 
+           x = 75, 
+           y = 25, 
+           label = "Hard coral", 
+           angle = 90,
+           hjust = 0.5)
+  #ggtitle("Croppers")
+```
+
+## OCTOCORAL
+
+### OCT: newdata
+
+```{r}
+oct_ab_newdata <- with(fishab_2,
+                         data.frame(total_octocoral = seq(min(total_octocoral),
+                                          max(total_octocoral),
+                                          length = 100)))
+```
+
+#### OCT x total herbivores
+
+###### Emmeans: OCT x total herbivores
+
+```{r}
+th_ab_oct <- 
+  herbs_mod_ab_hab |> 
+  emmeans(~ total_octocoral,
+          at = oct_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+###### Gather emmeans
+
+```{r}
+th_ab_oct_draws <- 
+gather_emmeans_draws(th_ab_oct)
+```
+
+###### Subset 200 draws
+
+```{r}
+th_ab_oct_draws_subset <- sample(unique(th_ab_oct_draws$.draw), 200)
+
+th_ab_oct_draws_200 <- th_ab_oct_draws  |>  
+  filter(.draw %in% th_ab_oct_draws_subset)
+```
+
+###### Plot: OCT x total herbivores
+
+```{r}
+p_thab_oct <-
+th_ab_oct_draws_200 |> 
+  ggplot(aes(x = total_octocoral, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#BFB59E", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkorange4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkorange4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                       limits = c(0, 50),
+  breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "Percentage cover") +
+theme(axis.title.x = element_blank(),
+      axis.text.x = element_blank(),
+        axis.title.y = element_text(size = 15),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 18))  +
+  ggtitle("c) Octocoral")
+```
+
+##### Plot: OCT x total herbivores (with images)
+
+```{r}
+p_thab_oct <-
+p_thab_oct + 
+  geom_image(data = tibble(total_octocoral = 5,
+                          .value = 43),
+             aes(image = ("Images/Octo_Sil.png")),
+             size = 0.35) +
+  geom_image(data = tibble(total_octocoral = 14,
+                           .value = 48),
+             aes(image = ("Images/siganid.png")),
+             size = 0.15) +
+  geom_image(data = tibble(total_octocoral = 14,
+                           .value = 43),
+             aes(image = ("Images/ctenochaetus.png")),
+             size = 0.15) +
+  geom_image(data = tibble(total_octocoral = 14,
+                           .value = 38),
+             aes(image = ("Images/scarus.png")),
+             size = 0.15)
+
+print(p_thab_oct)
+```
+
+##### OCT x croppers
+
+###### Emmeans: OCT x croppers
+
+```{r}
+crop_ab_oct <- 
+  crop_mod_ab_hab |> 
+  emmeans(~ total_octocoral,
+          at = oct_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+###### Gather emmeans
+
+```{r}
+crop_ab_oct_draws <- 
+gather_emmeans_draws(crop_ab_oct)
+```
+
+###### Subset 200 draws
+
+```{r}
+crop_ab_oct_draws_subset <- sample(unique(crop_ab_oct_draws$.draw), 200)
+
+crop_ab_oct_draws_200 <- crop_ab_oct_draws  |>  
+  filter(.draw %in% crop_ab_oct_draws_subset)
+```
+
+##### Plot: OCT x croppers
+
+```{r}
+p_crop_oct <-
+crop_ab_oct_draws_200 |> 
+  ggplot(aes(x = total_octocoral, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#BFB59E", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkorange4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkorange4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                       limits = c(0, 50),
+  breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "") +
+  theme(axis.title.x = element_blank(),
+      axis.text.x = element_blank(),
+        axis.title.y = element_text(size = 15),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 18)) +
+  ggtitle("a) Croppers x Octocoral")
+```
+
+### Plot: OCT x croppers (with images)
+
+```{r}
+p_crop_oct <-
+p_crop_oct +
+  geom_image(data = tibble(total_octocoral = 8,
+                           .value = 43),
+             aes(image = ("Images/Octo_Sil.png")),
+             size = 0.2) +
+  geom_image(data = tibble(total_octocoral = 8,
+                           .value = 30),
+             aes(image = ("Images/siganid.png")),
+             size = 0.2)
+
+print(p_crop_oct)
+```
+
+#### OCT x detritivores
+
+##### Emmeans: OCT x detritivores
+
+```{r}
+det_ab_oct <- 
+  det_mod_hab |> 
+  emmeans(~ total_octocoral,
+          at = oct_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+##### Gather emmeans
+
+```{r}
+det_ab_oct_draws <- 
+gather_emmeans_draws(det_ab_oct)
+```
+
+##### Subset 200 draws
+
+```{r}
+det_ab_oct_draws_subset <- sample(unique(det_ab_oct_draws$.draw), 200)
+
+det_ab_oct_draws_200 <- det_ab_oct_draws  |>  
+  filter(.draw %in% det_ab_oct_draws_subset)
+```
+
+##### Plot: OCT x detritivores
+
+```{r}
+p_detab_oct <-
+det_ab_oct_draws_200 |> 
+  ggplot(aes(x = total_octocoral, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#BFB59E", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkorange4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkorange4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                       limits = c(0, 50),
+  breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "") +
+   theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.title.y = element_text(size = 15),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 22),
+    plot.subtitle = element_text(size = 18)
+  ) +
+  ggtitle("e) Detritivores x Octocoral")
+```
+
+### Plot: OCT x detritivores (with images)
+
+```{r}
+p_detab_oct <-
+p_detab_oct +
+  geom_image(data = tibble(total_octocoral = 8,
+                           .value = 43),
+             aes(image = ("Images/Octo_Sil.png")),
+             size = 0.2) +
+  geom_image(data = tibble(total_octocoral = 8,
+                           .value = 30),
+             aes(image = ("Images/ctenochaetus.png")),
+             size = 0.2)
+
+p_detab_oct
+```
+
+#### OCT x scrapers
+
+##### Emmeans: OCT x scrapers
+
+```{r}
+scra_ab_oct <- 
+  scra_hab_mod |> 
+  emmeans(~ total_octocoral,
+          at = oct_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+##### Gather emmeans
+
+```{r}
+scra_ab_oct_draws <- 
+gather_emmeans_draws(scra_ab_oct)
+```
+
+##### Subset 200 draws
+
+```{r}
+scra_ab_oct_draws_subset <- sample(unique(scra_ab_oct_draws$.draw), 200)
+
+scra_ab_oct_draws_200 <- scra_ab_oct_draws  |>  
+  filter(.draw %in% scra_ab_oct_draws_subset)
+```
+
+##### Plot: OCT x scrapers
+
+```{r}
+p_scraab_oct <-
+scra_ab_oct_draws_200 |> 
+  ggplot(aes(x = total_octocoral, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#BFB59E", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkorange4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkorange4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                       limits = c(0, 50),
+  breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "Percentage cover") +
+  ggtitle("h) Scrapers x Octocoral") +
+  theme(
+        axis.title = element_text(size = 15),
+        axis.text = element_text(size = 12),
+        plot.title = element_text(size = 22),
+    plot.subtitle = element_text(size = 18)) 
+```
+
+##### Plot: OCT x scrapers (with images) 
+
+```{r}
+p_scraab_oct <-
+p_scraab_oct +
+  geom_image(data = tibble(total_octocoral = 8,
+                           .value = 43),
+             aes(image = ("Images/Octo_Sil.png")),
+             size = 0.2) +
+  geom_image(data = tibble(total_octocoral = 8,
+                           .value = 30),
+             aes(image = ("Images/scarus.png")),
+             size = 0.2)
+```
+
+## TURFS
+
+### TA: newdata
+
+```{r}
+ta_ab_newdata <- with(fishab_2,
+                         data.frame(turf_algae = seq(min(turf_algae),
+                                          max(turf_algae),
+                                          length = 100)))
+```
+
+#### TA x total herbivores
+
+##### Emmeans: TA x total herbivores
+
+```{r}
+th_ab_ta <- 
+  herbs_food_mod |> 
+  emmeans(~ turf_algae,
+          at = ta_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+##### Gather emmeans
+
+```{r}
+th_ab_ta_draws <- 
+gather_emmeans_draws(th_ab_ta)
+```
+
+##### Subset 200 draws
+
+```{r}
+th_ab_ta_draws_subset <- sample(unique(th_ab_ta_draws$.draw), 200)
+
+th_ab_ta_draws_200 <- th_ab_ta_draws  |>  
+  filter(.draw %in% th_ab_ta_draws_subset)
+```
+
+##### Plot: TA x total herbivores
+
+```{r}
+p_ab_ta <- 
+th_ab_ta_draws_200 |> 
+  ggplot(aes(x = turf_algae, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#929FBD", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "dodgerblue4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "dodgerblue4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "",
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "Percentage cover") +
+  theme_classic() +
+  ggtitle("d) Turfs") +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        #axis.ticks.y = element_blank(),
+        axis.title.x = element_text(size = 15),
+        axis.text.x = element_text(size = 12),
+        plot.title = element_text(size = 18))
+```
+
+##### Plot: TA x total herbivores (with images)
+
+```{r}
+p_ab_ta <-
+p_ab_ta + 
+  geom_image(data = tibble(turf_algae = 10,
+                          .value = 48),
+             aes(image = ("Images/Turf_Sil.png")),
+             size = 0.35) +
+  geom_image(data = tibble(turf_algae = 26,
+                           .value = 48),
+             aes(image = ("Images/siganid.png")),
+             size = 0.15) +
+  geom_image(data = tibble(turf_algae = 26,
+                           .value = 43),
+             aes(image = ("Images/ctenochaetus.png")),
+             size = 0.15) +
+  geom_image(data = tibble(turf_algae = 26,
+                           .value = 38),
+             aes(image = ("Images/scarus.png")),
+             size = 0.15)
+```
+
+#### TA x croppers
+
+##### Emmeans: TA x croppers
+
+```{r}
+crop_ab_ta <- 
+  crop_food_mod |> 
+  emmeans(~ turf_algae,
+          at = ta_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+##### Gather emmeans
+
+```{r}
+crop_ab_ta_draws <- 
+gather_emmeans_draws(crop_ab_ta)
+```
+
+##### Subset 200 draws
+
+```{r}
+crop_ab_ta_draws_subset <- sample(unique(crop_ab_ta_draws$.draw), 200)
+
+crop_ab_ta_draws_200 <- crop_ab_ta_draws  |>  
+  filter(.draw %in% crop_ab_ta_draws_subset)
+```
+
+##### Plot: TA x croppers
+
+```{r}
+p_cropab_ta <- 
+crop_ab_ta_draws_200 |> 
+  ggplot(aes(x = turf_algae, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#929FBD", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "dodgerblue4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "dodgerblue4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "",
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "") +
+  theme_classic() +
+  ggtitle("b) Croppers x Turfs") +
+  theme(
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    #axis.title.y = element_text(size = 15),
+    #axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 22))
+
+```
+
+##### Plot: TA x total croppers (with images)
+
+```{r}
+p_cropab_ta <-
+p_cropab_ta +
+  geom_image(data = tibble(turf_algae = 8,
+                          .value = 43),
+             aes(image = ("Images/Turf_Sil.png")),
+             size = 0.2) +
+  geom_image(data = tibble(turf_algae = 8,
+                           .value = 30),
+             aes(image = ("Images/siganid.png")),
+             size = 0.2)
+```
+
+#### TA x detritivores
+
+##### Emmeans: TA x detritivores
+
+```{r}
+det_ab_ta <- 
+  det_mod_food |> 
+  emmeans(~ turf_algae,
+          at = ta_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+##### Gather emmeans
+
+```{r}
+det_ab_ta_draws <- 
+gather_emmeans_draws(det_ab_ta)
+```
+
+##### Subset 200 draws
+
+```{r}
+det_ab_ta_draws_subset <- sample(unique(det_ab_ta_draws$.draw), 200)
+
+det_ab_ta_draws_200 <- det_ab_ta_draws  |>  
+  filter(.draw %in% det_ab_ta_draws_subset)
+```
+
+##### Plot: TA x detritivores
+
+```{r}
+p_detab_ta <- 
+det_ab_ta_draws_200 |> 
+  ggplot(aes(x = turf_algae, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#929FBD", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "dodgerblue4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "dodgerblue4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(expression(Cropper~abundance.150m^-2),
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  ggtitle("f) Detritivores x Turfs")+
+  scale_x_continuous(name = "") +
+  theme_classic() +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        plot.title = element_text(size = 22),
+    plot.subtitle = element_text(size = 18)) 
+
+```
+
+##### Plot: TA x detritivores (with images)
+
+```{r}
+p_detab_ta <-
+p_detab_ta +
+  geom_image(data = tibble(turf_algae = 8,
+                          .value = 43),
+             aes(image = ("Images/Turf_Sil.png")),
+             size = 0.2) +
+  geom_image(data = tibble(turf_algae = 8,
+                           .value = 30),
+             aes(image = ("Images/ctenochaetus.png")),
+             size = 0.2)
+```
+
+#### TA x scrapers
+
+##### Emmeans: TA x scrapers
+
+```{r}
+scra_ab_ta <- 
+  scra_food_mod |> 
+  emmeans(~ turf_algae,
+          at = ta_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+##### Gather emmeans
+
+```{r}
+scra_ab_ta_draws <- 
+gather_emmeans_draws(scra_ab_ta)
+```
+
+##### Subset 200 draws
+
+```{r}
+scra_ab_ta_draws_subset <- sample(unique(scra_ab_ta_draws$.draw), 200)
+
+scra_ab_ta_draws_200 <- scra_ab_ta_draws  |>  
+  filter(.draw %in% scra_ab_ta_draws_subset)
+```
+
+##### Plot: TA x scrapers
+
+```{r}
+p_scraab_ta <- 
+scra_ab_ta_draws_200 |> 
+  ggplot(aes(x = turf_algae, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#929FBD", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "dodgerblue4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "dodgerblue4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "",
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "Percentage cover") +
+  theme_classic() +
+  ggtitle("i) Scrapers x Turfs") +
+  theme(
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.title.x = element_text(size = 15),
+    axis.text.x = element_text(size = 12),
+    plot.title = element_text(size = 22))
+```
+
+##### Plot: TA x scrapers (with images) 
+
+```{r}
+p_scraab_ta <-
+p_scraab_ta +
+  geom_image(data = tibble(turf_algae = 8,
+                          .value = 43),
+             aes(image = ("Images/Turf_Sil.png")),
+             size = 0.2) +
+  geom_image(data = tibble(turf_algae = 8,
+                           .value = 30),
+             aes(image = ("Images/scarus.png")),
+             size = 0.2)
+```
+
+# MACROALGAE
+
+### MA: newdata
+
+```{r}
+ma_ab_newdata <- with(fishab_2,
+                         data.frame(total_macroalgae = seq(min(total_macroalgae),
+                                          max(total_macroalgae),
+                                          length = 100)))
+```
+
+#### MA x total herbivores
+
+##### Emmeans: MA x total herbivores
+
+```{r}
+th_ab_ma <- 
+  herbs_food_mod |> 
+  emmeans(~ total_macroalgae,
+          at = ma_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+##### Gather emmeans
+
+```{r}
+th_ab_ma_draws <- 
+gather_emmeans_draws(th_ab_ma)
+```
+
+##### Subset 200 draws
+
+```{r}
+th_ab_ma_draws_subset <- sample(unique(th_ab_ma_draws$.draw), 200)
+
+th_ab_ma_draws_200 <- th_ab_ma_draws  |>  
+  filter(.draw %in% th_ab_ma_draws_subset)
+```
+
+##### Plot: MA x total herbivores
+
+```{r}
+p_th_ab_ma <- 
+th_ab_ma_draws_200 |> 
+  ggplot(aes(x = total_macroalgae, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#8AA17D", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkgreen", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkgreen", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                       limits = c(0, 50),
+  breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "Percentage cover") +
+  theme_classic() +
+  ggtitle("e) Macroalgae") +
+  theme(
+        axis.title = element_text(size = 15),
+        axis.text = element_text(size = 12),
+        plot.title = element_text(size = 18)) 
+```
+
+##### Plot: MA x total herbivores (with images)
+
+```{r}
+p_th_ab_ma <-
+p_th_ab_ma + 
+  geom_image(data = tibble(total_macroalgae = 10,
+                          .value = 40),
+             aes(image = ("Images/MA_Sil.png")),
+             size = 0.35) +
+  geom_image(data = tibble(total_macroalgae = 26,
+                           .value = 48),
+             aes(image = ("Images/siganid.png")),
+             size = 0.15) +
+  geom_image(data = tibble(total_macroalgae = 26,
+                           .value = 43),
+             aes(image = ("Images/ctenochaetus.png")),
+             size = 0.15) +
+  geom_image(data = tibble(total_macroalgae = 26,
+                           .value = 38),
+             aes(image = ("Images/scarus.png")),
+             size = 0.15)
+
+print(p_th_ab_ma)
+```
+
+##### MA: croppers
+
+##### emmeans: MA x croppers
+
+```{r}
+crop_ab_ma <- 
+  crop_food_mod |> 
+  emmeans(~ total_macroalgae,
+          at = ma_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+##### Gather emmeans
+
+```{r}
+crop_ab_ma_draws <- 
+gather_emmeans_draws(crop_ab_ma)
+```
+
+##### Subset 200 draws
+
+```{r}
+crop_ab_ma_draws_subset <- sample(unique(crop_ab_ma_draws$.draw), 200)
+
+crop_ab_ma_draws_200 <- crop_ab_ma_draws  |>  
+  filter(.draw %in% crop_ab_ma_draws_subset)
+```
+
+##### Plot: MA x croppers
+
+```{r}
+p_crop_ab_ma <- 
+crop_ab_ma_draws_200 |> 
+  ggplot(aes(x = total_macroalgae, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#8AA17D", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkgreen", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkgreen", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "",
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "") +
+  theme_classic() +
+  ggtitle("d) Croppers x Macroalgae") +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank()) 
+
+print(p_crop_ab_ma)
+```
+
+##### Plot: MA x croppers (with images)
+
+```{r}
+p_crop_ab_ma <-
+p_crop_ab_ma + 
+  geom_image(data = tibble(total_macroalgae = 8,
+                          .value = 43),
+             aes(image = ("Images/MA_Sil.png")),
+             size = 0.2) + 
+  geom_image(data = tibble(total_macroalgae = 8,
+                           .value = 30),
+             aes(image = ("Images/siganid.png")),
+             size = 0.2)
+```
+
+##### MA: detritivores
+
+##### Emmeans: MA x detritivores
+
+```{r}
+det_ab_ma <- 
+  det_mod_food |> 
+  emmeans(~ total_macroalgae,
+          at = ma_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+##### Gather emmeans
+
+```{r}
+det_ab_ma_draws <- 
+gather_emmeans_draws(det_ab_ma)
+```
+
+##### Subset 200 draws
+
+```{r}
+det_ab_ma_draws_subset <- sample(unique(det_ab_ma_draws$.draw), 200)
+
+det_ab_ma_draws_200 <- det_ab_ma_draws  |>  
+  filter(.draw %in% det_ab_ma_draws_subset)
+```
+
+##### Plot: MA x detritivores
+
+```{r}
+p_det_ab_ma <- 
+det_ab_ma_draws_200 |> 
+  ggplot(aes(x = det_ab_ma_draws_200, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#8AA17D", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkgreen", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkgreen", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "",
+                     limits = c(0,60),
+                     breaks = seq(0, 60, by = 20)) +
+  theme_classic() +
+  scale_x_continuous(name = "") +
+  theme_classic() +
+  #ggtitle("P = 0.95") +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        plot.title = element_blank()) 
+```
+
+##### MA: scrapers
+
+##### Emmeans: MA x scrapers
+
+```{r}
+scra_ab_ma <- 
+  scra_food_mod |> 
+  emmeans(~ total_macroalgae,
+          at = ma_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+##### Gather emmeans
+
+```{r}
+scra_ab_ma_draws <- 
+gather_emmeans_draws(scra_ab_ma)
+```
+
+##### Subset 200 draws
+
+```{r}
+scra_ab_ma_draws_subset <- sample(unique(scra_ab_ma_draws$.draw), 200)
+
+scra_ab_ma_draws_200 <- scra_ab_ma_draws  |>  
+  filter(.draw %in% scra_ab_ma_draws_subset)
+```
+
+##### Plot: MA x scrapers
+
+```{r}
+p_scraab_ma <- 
+scra_ab_ma_draws_200 |> 
+  ggplot(aes(x = total_macroalgae, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#8AA17D", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkgreen", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkgreen", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "",
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "Percentage cover") +
+  theme_classic() +
+  ggtitle("k) Scrapers x Macroalgae") +
+ theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        #axis.ticks.y = element_blank(),
+        axis.title.x = element_text(size = 15),
+        axis.text.x = element_text(size = 12),
+        plot.title = element_text(size = 22),
+    plot.subtitle = element_text(size = 18)) 
+```
+
+##### Plot: MA x scrapers (with images)
+
+```{r}
+p_scraab_ma <-
+p_scraab_ma + 
+  geom_image(data = tibble(total_macroalgae = 8,
+                          .value = 43),
+             aes(image = ("Images/MA_Sil.png")),
+             size = 0.2) + 
+  geom_image(data = tibble(total_macroalgae = 8,
+                           .value = 30),
+             aes(image = ("Images/scarus.png")),
+             size = 0.2)
+
+p_scraab_ma
+```
+
+# SPONGE
+
+## SP: newdata
+
+```{r}
+sp_ab_newdata <- with(fishab_2,
+                         data.frame(sponge = seq(min(sponge),
+                                          max(sponge),
+                                          length = 100)))
+```
+
+#### SP x total herbivores
+
+##### Emmeans: SP x total herbivores
+
+```{r}
+th_ab_sp <- 
+  herbs_food_mod |> 
+  emmeans(~ sponge,
+          at = sp_ab_newdata,
+          data = fishab_2,
+          type = "response",
+          epred = "TRUE") 
+```
+
+##### Gather emmeans
+
+```{r}
+th_ab_sp_draws <- 
+gather_emmeans_draws(th_ab_sp)
+```
+
+##### Subset 200 draws
+
+```{r}
+th_ab_sp_draws_subset <- sample(unique(th_ab_sp_draws$.draw), 200)
+
+th_ab_sp_draws_200 <- th_ab_sp_draws  |>  
+  filter(.draw %in% th_ab_sp_draws_subset)
+```
+
+##### Plot: SP x total herbivores
+
+```{r}
+p_thab_sp <- 
+th_ab_sp_draws_200 |> 
+  ggplot(aes(x = sponge, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#E29297", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "firebrick4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "firebrick4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "",
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "Percentage cover") +
+  theme_classic() +
+  ggtitle("Sponge") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title.y = element_text(size = 15),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 18)) 
+```
+
+#### SP: croppers
+
+##### Emmeans: SP x croppers 
+
+```{r}
+crop_ab_sp <- 
+  crop_food_mod |> 
+  emmeans(~ sponge,
+          at = sp_ab_newdata,
+          data = fishab_2,
+          type = "response",
+          epred = "TRUE") 
+```
+
+##### Gather emmeans
+
+```{r}
+crop_ab_sp_draws <- 
+gather_emmeans_draws(crop_ab_sp)
+```
+
+##### Subset 200 draws
+
+```{r}
+crop_ab_sp_draws_subset <- sample(unique(crop_ab_sp_draws$.draw), 200)
+
+crop_ab_sp_draws_200 <- crop_ab_sp_draws  |>  
+  filter(.draw %in% crop_ab_sp_draws_subset)
+```
+
+##### Plot: SP x croppers 
+
+```{r}
+p_cropab_sp <- 
+crop_ab_sp_draws_200 |> 
+  ggplot(aes(x = sponge, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#E29297", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "firebrick4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "firebrick4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "",
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "Percentage cover") +
+  theme_classic() +
+  #ggtitle("P = 0.91") +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        plot.title = element_blank())
+```
+
+#### SP: detritivores
+
+##### Emmeans: SP x detritivores
+
+```{r}
+det_ab_sp <- 
+  det_mod_food |> 
+  emmeans(~ sponge,
+          at = sp_ab_newdata,
+          data = fishab_2,
+          type = "response",
+          epred = "TRUE") 
+```
+
+##### Gather emmeans
+
+```{r}
+det_ab_sp_draws <- 
+gather_emmeans_draws(det_ab_sp)
+```
+
+##### Subset 200 draws
+
+```{r}
+det_ab_sp_draws_subset <- sample(unique(det_ab_sp_draws$.draw), 200)
+
+det_ab_sp_draws_200 <- det_ab_sp_draws  |>  
+  filter(.draw %in% det_ab_sp_draws_subset) |> 
+  filter(.value < 200)
+```
+
+##### Plot: SP x detritivores
+
+```{r}
+p_detab_sp <- 
+det_ab_sp_draws_200 |> 
+  ggplot(aes(x = sponge, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#E29297", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "firebrick4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "firebrick4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "",
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "Percentage cover") +
+  theme_classic() +
+  ggtitle("g) Detritivores x Sponge") +
+    theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+       #axis.ticks = element_blank(),
+       plot.title = element_text(size = 22),
+    plot.subtitle = element_text(size = 18)
+)   
+```
+
+### Plot: SP x detritivores (with images)
+
+```{r}
+p_detab_sp <-
+p_detab_sp +
+  geom_image(data = tibble(sponge = 5,
+                          .value = 43),
+             aes(image = ("Images/Sponge_Sil.png")),
+             size = 0.2) +
+  geom_image(data = tibble(sponge = 5,
+                           .value = 30),
+             aes(image = ("Images/ctenochaetus.png")),
+             size = 0.2)
+
+p_detab_sp
+```
+
+#### SP x scrapers
+
+##### Emmeans: SP x scrapers
+
+```{r}
+scra_ab_sp <- 
+  scra_food_mod  |> 
+  emmeans(~ sponge,
+          at = sp_ab_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+##### Gather emmeans
+
+```{r}
+scra_ab_sp_draws <- 
+gather_emmeans_draws(scra_ab_sp)
+```
+
+##### Subset 200 draws
+
+```{r}
+scra_ab_sp_draws_subset <- sample(unique(scra_ab_sp_draws$.draw), 200)
+
+scra_ab_sp_draws_200 <- scra_ab_sp_draws  |>  
+  filter(.draw %in% scra_ab_sp_draws_subset) |> 
+  filter(max(.value) <= 5) |>
+  ungroup()
+```
+
+##### Plot: SP x scrapers
+
+```{r}
+p_scraab_sp <- 
+scra_ab_sp_draws_200 |> 
+  ggplot(aes(x = sponge, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#E29297", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "firebrick4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "firebrick4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "",
+                    limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "Percentage cover") +
+  theme_classic() +
+  ggtitle("j) Scrapers x Sponge") +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        #axis.ticks.y = element_blank(),
+        axis.title.x = element_text(size = 15),
+        axis.text.x = element_text(size = 12),
+        plot.title = element_text(size = 22)) 
+```
+
+### Plot: SP x scrapers (with images)
+
+```{r}
+p_scraab_sp <-
+p_scraab_sp +
+  geom_image(data = tibble(sponge = 1.5,
+                          .value = 43),
+             aes(image = ("Images/Sponge_Sil.png")),
+             size = 0.2) +
+  geom_image(data = tibble(sponge = 1.5,
+                           .value = 30),
+             aes(image = ("Images/scarus.png")),
+             size = 0.2)
+
+p_scraab_sp
+```
+
+# Combine plots: benthic categories x abundance
+
+```{r}
+p_fg_ab <-
+wrap_plots(
+  p_crop_oct,   p_cropab_ta, p_crop_bc,   p_crop_ab_ma,
+  p_detab_oct,  p_detab_ta,  p_detab_sp,  plot_spacer(),
+  p_scraab_oct, p_scraab_ta, p_scraab_sp, p_scraab_ma,
+  ncol = 4
+) &
+  theme(
+    plot.title = element_text(size = 18, hjust = 0)
+  )
+```
+
+# ggsave
+
+```{r}
+ggsave("Figures/p_fg_ab_ver2.jpeg",
+       plot =p_fg_ab, 
+       dpi = 600, 
+       height = 15, 
+       width = 17, 
+       units = "in")
+```
+
+# =========================
+
+# Description
+
+Below this line are code for the interpretation and figure generation of changes in herbivore abundance (total and for each feeding group) with depth
+
+# ABUNDANCE SUMMARY TABLE
+
+## Summary table: depth x abun total herbs
+
+```{r}
+herbs_depthmod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  filter(Pl > 0.85 |
+          Pg > 0.85)
+```
+
+## Summary table: depth x abun crops
+
+```{r}
+crops_depthmod|> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  filter(Pl > 0.85 |
+          Pg > 0.85)
+```
+
+## Summary table: depth x abun det
+
+```{r}
+det_depthmod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  filter(Pl > 0.85 |
+          Pg > 0.85)
+```
+
+## Summary table: depth x abun scra
+
+```{r}
+scra_depthmod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  filter(Pl > 0.85 |
+          Pg > 0.85)
+```
+
+# Plotting
+
+# TOTAL HERBS
+
+## Load model
+
+```{r}
+load("Model_Output/herbs_depthmod_ab.Rdata")
+```
+
+## Newdata
+
+```{r}
+depthabun_newdata <- with(fishab_2,
+                      data.frame(Depth_m = seq(min(Depth_m),
+                                             max(Depth_m),
+                                             length = 100)))
+```
+
+## Emmeans
+
+```{r}
+fishabun_em <- 
+  herbs_depthmod |> 
+  emmeans(~ Depth_m,
+          at = depthabun_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+## Gather emmeans
+
+```{r}
+fishabun_em_draws <- 
+gather_emmeans_draws(fishabun_em)
+```
+
+## Subset 200 draws
+
+```{r}
+fishabun_draw_subset <- sample(unique(fishabun_em_draws$.draw), 200)
+
+fishabun_em_draws_200 <- fishabun_em_draws  |>  
+  filter(.draw %in% fishabun_draw_subset)
+
+```
+
+## Plot
+
+```{r}
+p2_depth_th <- 
+fishabun_em_draws_200 |> 
+  ggplot(aes(x = Depth_m, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#929FBD", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "dodgerblue4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "dodgerblue4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                     limits = c(0,80),
+                     breaks = seq(0, 80, by = 20)) +
+  theme_classic() +
+  scale_x_continuous(name = "") +
+  ggtitle("Total herbivores") +
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        #axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 15),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 18))
+```
+
+# CROPPERS
+
+## Load model
+
+```{r}
+load("Model_Output/crops_depthmod_ab.Rdata")
+```
+
+## Newdata
+
+```{r}
+depthabun_newdata <- with(fishab_2,
+                      data.frame(Depth_m = seq(min(Depth_m),
+                                             max(Depth_m),
+                                             length = 100)))
+```
+
+## Emmeans
+
+```{r}
+cropabun_em <- 
+ crops_depthmod |> 
+  emmeans(~ Depth_m,
+          at = depthabun_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+## Gather emmeans
+
+```{r}
+cropabun_em_draws <- 
+gather_emmeans_draws(cropabun_em)
+```
+
+## Subset 200 draws
+
+```{r}
+cropabun_draw_subset <- sample(unique(cropabun_em_draws$.draw), 200)
+
+cropabun_em_draws_200 <- cropabun_em_draws  |>  
+  filter(.draw %in% cropabun_draw_subset)
+```
+
+## Plot
+
+```{r}
+p3_depth_crop <- 
+cropabun_em_draws_200 |> 
+  ggplot(aes(x = Depth_m, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#DDD487", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "yellow4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "yellow4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                     limits = c(0,80),
+                     breaks = seq(0, 80, by = 20)) +
+  theme_classic() +
+  scale_x_continuous(name = "") +
+  ggtitle("Cropper") +
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        #axis.ticks.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        plot.title = element_text(size = 18))
+```
+
+# DETRITIVORE
+
+## Load model
+
+```{r}
+load("Model_Output/det_depthmod_ab.Rdata")
+```
+
+## Newdata
+
+```{r}
+depthabun_newdata <- with(fishab_2,
+                      data.frame(Depth_m = seq(min(Depth_m),
+                                             max(Depth_m),
+                                             length = 100)))
+```
+
+## Emmeans
+
+```{r}
+detabun_em <- 
+ det_depthmod |> 
+  emmeans(~ Depth_m,
+          at = depthabun_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+## Gather emmeans
+
+```{r}
+detabun_em_draws <- 
+gather_emmeans_draws(detabun_em)
+```
+
+## Subset 200 draws
+
+```{r}
+detabun_draw_subset <- sample(unique(detabun_em_draws$.draw), 200)
+
+detabun_em_draws_200 <- detabun_em_draws  |>  
+  filter(.draw %in% detabun_draw_subset)
+```
+
+## Plot
+
+```{r}
+p4_depth_det <- 
+detabun_em_draws_200 |> 
+  ggplot(aes(x = Depth_m, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#BFB59E", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkorange4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkorange4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                     limits = c(0,80),
+                     breaks = seq(0, 80, by = 20)) +
+  theme_classic() +
+  scale_x_continuous(name = "Depth (m)") +
+  ggtitle("Detritivore") +
+  theme_classic() +
+  theme(axis.title.x = element_text(size = 15),
+        axis.text.x = element_text(size = 12),
+        #axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 15),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 18))
+```
+
+# SCRAPER
+
+## Load model
+
+```{r}
+load("Model_Output/scra_depthmod_ab.Rdata")
+```
+
+## Newdata
+
+```{r}
+depthabun_newdata <- with(fishab_2,
+                      data.frame(Depth_m = seq(min(Depth_m),
+                                             max(Depth_m),
+                                             length = 100)))
+```
+
+## Emmeans
+
+```{r}
+scraabun_em <- 
+ scra_depthmod |> 
+  emmeans(~ Depth_m,
+          at = depthabun_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+## Gather emmeans
+
+```{r}
+scraabun_em_draws <- 
+gather_emmeans_draws(scraabun_em)
+```
+
+## Subset 200 draws
+
+```{r}
+scraabun_draw_subset <- sample(unique(scraabun_em_draws$.draw), 200)
+
+scraabun_em_draws_200 <- scraabun_em_draws  |>  
+  filter(.draw %in% scraabun_draw_subset)
+```
+
+## Plot
+
+```{r}
+p5_depth_scra <- 
+scraabun_em_draws_200 |> 
+  ggplot(aes(x = Depth_m, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#BFAECF", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkorchid4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkorchid4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                     limits = c(0,80),
+                     breaks = seq(0, 80, by = 20)) +
+  theme_classic() +
+  scale_x_continuous(name = "Depth (m)") +
+  ggtitle("Scraper") +
+  theme_classic() +
+  theme(axis.title.x = element_text(size = 15),
+        axis.text.x = element_text(size = 12),
+        #axis.ticks.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        plot.title = element_text(size = 18))
+```
+
+# Combine plots
+
+```{r}
+p_depth_sp_ab <-
+(p1_depth_spr + plot_spacer()) /
+  (p2_depth_th + p3_depth_crop) /
+  (p4_depth_det + p5_depth_scra)  +
+  plot_annotation(tag_levels = "a") &
+  theme(plot.tag = element_text(size = 15))
+```
+
+# ggsave
+
+```{r}
+ggsave("Figures/p_depth_sp_ab.jpeg",
+       plot = p_depth_sp_ab, 
+       dpi = 600, 
+       height = 11, 
+       width = 9, 
+       units = "in")
+```

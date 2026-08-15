@@ -1,0 +1,425 @@
+---
+title: "pred_fits"
+format: html
+editor: visual
+---
+
+# Description
+This qmd examines the relationship between predator and herbivore abundance (total and for each feeding group).
+
+# Clean up
+```{r}
+rm(list=ls())
+gc()
+```
+
+# Library
+
+```{r}
+# load library
+#| label: libraries
+#| output: false
+#| eval: true
+#| warning: false
+#| message: false
+#| cache: false
+
+library(tidyverse)
+library(rstanarm)
+library(brms)
+library(coda)
+library(bayesplot)
+library(DHARMa)
+library(emmeans)
+library(broom)
+library(tidybayes)
+library(ggeffects)
+library(broom.mixed)
+library(bayestestR)
+library(see)
+library(easystats)
+library(patchwork)
+library(ggridges)
+source("helperFunctions.R")
+library(ggimage)
+library(iNEXT)
+set.seed(123)
+```
+
+Load csv
+
+```{r}
+preds <- read_csv("Data/db_predation.csv", trim_ws = TRUE)
+```
+
+## Select relevant variables
+
+```{r}
+preds_2 <-
+  preds |> 
+  select(Reef_2,
+         Site.x,
+         Transect,
+         Number,
+         Depth_m.x,
+         cropper,
+         browser,
+         detritivore,
+         excavator,
+         scraper,
+         total_herbs) |> 
+  mutate(Reef_2 = factor(Reef_2),
+         Site.x = factor(Site.x))
+```
+
+# TOTAL HERBIVORES
+
+## Def formula
+
+```{r}
+pred_herbs_form <- bf(total_herbs ~ 
+                   Number +
+                   (1 | Reef_2/Site.x), 
+                 family = zero_inflated_negbinomial())
+```
+
+## Weakly informed priors
+
+```{r}
+th_pred_priors <- prior(normal(2.2, 2.5), class = "Intercept") +
+  prior(normal(0, 1), class = "b") +
+  prior(gamma(0.01, 0.01), class = "shape") +
+  prior(student_t(3, 0, 2.5), class = "sd") +
+  prior(beta(1,1), class = "zi") #+
+  #prior(student_t(3, 0, 2.5), class = "sigma")
+```
+
+## Prior only model
+
+```{r}
+#| cache: true
+th_pred_prior_mod <- brm(pred_herbs_form,
+                    data = preds_2,
+                    prior = th_pred_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+## Fit the model
+
+```{r}
+#| cache: true
+th_pred_mod <- update(th_pred_prior_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+th_pred_mod |> mcmc_plot(type = "trace")
+
+# autocorr
+th_pred_mod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+th_pred_mod |> mcmc_plot(type = "rhat_hist")
+
+# ess
+th_pred_mod |> mcmc_plot(type = "neff_hist")
+```
+
+## Residuals
+
+```{r}
+th_pred_resids <- make_brms_dharma_res(th_pred_mod)
+
+# qqplot
+th_pred_resids |> testUniformity()
+
+# residplot
+th_pred_resids |> plotResiduals()
+
+# testdisp
+th_pred_resids |> testDispersion()
+```
+
+# Save model
+
+```{r}
+save(th_pred_mod, file = "Model/th_pred_mod.Rdata")
+```
+
+# CROPPERS
+
+## Def formula
+
+```{r}
+pred_crop_form <- bf(cropper ~ 
+                   Number +
+                   (1 | Reef_2/Site.x), 
+                 family = zero_inflated_negbinomial())
+```
+
+## Weakly informed priors
+
+```{r}
+crop_pred_priors <- prior(normal(1.6, 1.8), class = "Intercept") +
+  prior(normal(0, 1), class = "b") +
+  prior(gamma(0.01, 0.01), class = "shape") +
+  prior(student_t(3, 0, 1.8), class = "sd") +
+  prior(beta(1,1), class = "zi") #+
+  #prior(student_t(3, 0, 2.5), class = "sigma")
+```
+
+## Prior only model
+
+```{r}
+#| cache: true
+crop_pred_prior_mod <- brm(pred_crop_form,
+                    data = preds_2,
+                    prior = crop_pred_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+## Fit the model
+
+```{r}
+#| cache: true
+crop_pred_mod <- update(crop_pred_prior_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+crop_pred_mod |> mcmc_plot(type = "trace")
+
+# autocorr
+crop_pred_mod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+crop_pred_mod |> mcmc_plot(type = "rhat_hist")
+
+# ess
+crop_pred_mod |> mcmc_plot(type = "neff_hist")
+```
+
+## Residuals
+
+```{r}
+crop_pred_resids <- make_brms_dharma_res(crop_pred_mod)
+
+# qqplot
+crop_pred_resids |> testUniformity()
+
+# residplot
+crop_pred_resids |> plotResiduals()
+
+# testdisp
+crop_pred_resids |> testDispersion()
+```
+
+# Save model
+
+```{r}
+save(crop_pred_mod, file = "Model/crop_pred_mod.Rdata")
+```
+
+# DETRITIVORES
+
+## Def formula
+
+```{r}
+pred_det_form <- bf(detritivore ~ 
+                   Number +
+                   (1 | Reef_2/Site.x), 
+                 family = zero_inflated_negbinomial())
+```
+
+## Weakly informed priors
+
+```{r}
+det_pred_priors <- prior(normal(1.3, 1.7), class = "Intercept") +
+  prior(normal(0, 0.8), class = "b") +
+  prior(gamma(0.01, 0.01), class = "shape") +
+  prior(student_t(3, 0, 1.7), class = "sd") +
+  prior(beta(1,1), class = "zi") #+
+  #prior(student_t(3, 0, 2.5), class = "sigma")
+```
+
+## Prior only model
+
+```{r}
+#| cache: true
+det_pred_prior_mod <- brm(pred_det_form,
+                    data = preds_2,
+                    prior = det_pred_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+# Fit the model
+
+```{r}
+#| cache: true
+det_pred_mod <- update(det_pred_prior_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+det_pred_mod |> mcmc_plot(type = "trace")
+
+# autocorr
+det_pred_mod|> mcmc_plot(type = "acf_bar")
+
+# rhat
+det_pred_mod |> mcmc_plot(type = "rhat_hist")
+
+# ess
+det_pred_mod |> mcmc_plot(type = "neff_hist")
+```
+
+## Residuals
+
+```{r}
+det_pred_resids <- make_brms_dharma_res(det_pred_mod)
+
+# qqplot
+det_pred_resids |> testUniformity()
+
+# residplot
+det_pred_resids |> plotResiduals()
+
+# testdisp
+det_pred_resids |> testDispersion()
+```
+
+# Save model
+
+```{r}
+save(det_pred_mod, file = "Model/det_pred_mod.Rdata")
+```
+
+# SCRAPERS
+
+## Def formula
+
+```{r}
+pred_scra_form <- bf(scraper ~ 
+                   Number +
+                   (1 | Reef_2/Site.x), 
+                 family = zero_inflated_negbinomial())
+```
+
+## Weakly informed priors
+
+```{r}
+scra_pred_priors <- prior(normal(0.5, 1.1), class = "Intercept") +
+  prior(normal(0, 0.5), class = "b") +
+  prior(gamma(0.01, 0.01), class = "shape") +
+  prior(student_t(3, 0, 1.1), class = "sd") +
+  prior(beta(1,1), class = "zi") #+
+  #prior(student_t(3, 0, 2.5), class = "sigma")
+```
+
+## Prior only model
+
+```{r}
+#| cache: true
+scra_pred_prior_mod <- brm(pred_scra_form,
+                    data = preds_2,
+                    prior = scra_pred_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 0)
+```
+
+# Fit the model
+
+```{r}
+#| cache: true
+scra_pred_mod <- update(scra_pred_prior_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+scra_pred_mod |> mcmc_plot(type = "trace")
+
+# autocorr
+scra_pred_mod|> mcmc_plot(type = "acf_bar")
+
+# rhat
+scra_pred_mod |> mcmc_plot(type = "rhat_hist")
+
+# ess
+scra_pred_mod |> mcmc_plot(type = "neff_hist")
+```
+
+## Residuals
+
+```{r}
+scra_pred_resids <- make_brms_dharma_res(scra_pred_mod)
+
+# qqplot
+scra_pred_resids |> testUniformity()
+
+# residplot
+scra_pred_resids |> plotResiduals()
+
+# testdisp
+scra_pred_resids |> testDispersion()
+```
+
+# Save model
+
+```{r}
+save(scra_pred_mod, file = "Model/scra_pred_mod.Rdata")
+```

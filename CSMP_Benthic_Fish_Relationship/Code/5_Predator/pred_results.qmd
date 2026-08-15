@@ -1,0 +1,311 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+# Description
+This qmd has file has code on the interpretation and figure generation on the relationship between predator and herbivore abundance.
+
+# LOAD models
+
+```{r}
+load("Model/th_pred_mod.Rdata")
+load("Model/crop_pred_mod.Rdata")
+load("Model/det_pred_mod.Rdata")
+load("Model/scra_pred_mod.Rdata")
+```
+
+## Summary table
+
+```{r}
+scra_pred_mod |> as_draws_df() |> 
+  dplyr::select(matches("^b_.*")) |> 
+  exp() |> # exp to get log-odds scale (crosses 1)
+  summarise_draws(median,
+                  HDInterval::hdi, 
+                  Pl= ~mean(.x < 1),
+                  Pg = ~mean(.x > 1)) |> 
+  filter(Pl > 0.85 |
+          Pg > 0.85)
+```
+
+Total predators: no effect (P = 0.52); 
+Croppers: no effect (P = 0.79); 
+Detritivores: no effect (P = 0.71);
+Scrapers: no effect (P = 0.78)
+
+# Plots
+
+## Total herbivores
+
+### Newdata
+
+```{r}
+predTH_newdata <- with(preds,
+                         data.frame(Number = seq(min(Number),
+                                          max(Number),
+                                          length = 100)))
+```
+
+### Emmeans
+
+```{r}
+emmean_predTH <- 
+  th_pred_mod |> 
+  emmeans(~ Number,
+          at = predTH_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+#### Gather emmeans
+
+```{r}
+predTH_draws <- 
+gather_emmeans_draws(emmean_predTH)
+```
+
+#### Subset 200 draws
+
+```{r}
+predTH_draws_subset <- sample(unique(predTH_draws$.draw), 200)
+
+predTH_draws_200 <- predTH_draws  |>  
+  filter(.draw %in% predTH_draws_subset)
+```
+
+#### Plot: total herbivores
+
+```{r}
+p_predTH <- 
+predTH_draws_200 |> 
+  ggplot(aes(x = Number, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#DDD487", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "yellow4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "yellow4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "") +
+  theme_classic() +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        #axis.ticks.x = element_blank(),
+        axis.title.y = element_text(size = 15),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 18)) +
+  ggtitle("Total herbivores")
+```
+
+## Croppers
+
+### Emmeans
+
+```{r}
+emmean_predCROP <- 
+  crop_pred_mod |> 
+  emmeans(~ Number,
+          at = predTH_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+#### Gather emmeans
+
+```{r}
+predCROP_draws <- 
+gather_emmeans_draws(emmean_predCROP)
+```
+
+#### Subset 200 draws
+
+```{r}
+predCROP_draws_subset <- sample(unique(predCROP_draws$.draw), 200)
+
+predCROP_draws_200 <- predCROP_draws  |>  
+  filter(.draw %in% predCROP_draws_subset)
+```
+
+#### Plot: croppers
+
+```{r}
+p_predCROP <- 
+predCROP_draws_200 |> 
+  ggplot(aes(x = Number, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#BFB59E", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkorange4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkorange4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name = "",
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(name = "") +
+  theme_classic() +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        #axis.ticks.x = element_blank(),
+        #axis.title.y = element_text(size = 15),
+        #axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 18)) +
+  ggtitle("Croppers")
+```
+
+## Detritivores
+
+### Emmeans
+
+```{r}
+emmean_predDET <- 
+  det_pred_mod |> 
+  emmeans(~ Number,
+          at = predTH_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+#### Gather emmeans
+
+```{r}
+predDET_draws <- 
+gather_emmeans_draws(emmean_predDET)
+```
+
+#### Subset 200 draws
+
+```{r}
+predDET_draws_subset <- sample(unique(predDET_draws$.draw), 200)
+
+predDET_draws_200 <- predDET_draws  |>  
+  filter(.draw %in% predDET_draws_subset)
+```
+
+#### Plot: detritivores
+
+```{r}
+predDET <- 
+predDET_draws_200 |> 
+  ggplot(aes(x = Number, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#929FBD", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "dodgerblue4", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "dodgerblue4", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(expression(Abundance~(ind.150m^-2)),
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(expression(Predator~abundance~(ind.150m^-2))) +
+  theme_classic() +
+  theme(
+        #axis.ticks.x = element_blank(),
+        axis.title = element_text(size = 15),
+        axis.text = element_text(size = 12),
+        plot.title = element_text(size = 18)) +
+  ggtitle("Detritivores")
+```
+
+## Scrapers
+
+### Emmeans
+
+```{r}
+emmean_predSCRA <- 
+  scra_pred_mod |> 
+  emmeans(~ Number,
+          at = predTH_newdata,
+          type = "response",
+          epred = "TRUE") 
+```
+
+#### Gather emmeans
+
+```{r}
+predSCRA_draws <- 
+gather_emmeans_draws(emmean_predSCRA)
+```
+
+#### Subset 200 draws
+
+```{r}
+predSCRA_draws_subset <- sample(unique(predSCRA_draws$.draw), 200)
+
+predSCRA_draws_200 <- predSCRA_draws  |>  
+  filter(.draw %in% predSCRA_draws_subset)
+```
+
+#### Plot: scrapers
+
+```{r}
+predSCRA <- 
+predSCRA_draws_200 |> 
+  ggplot(aes(x = Number, 
+             y = .value)) +
+ geom_line(aes(group = .draw), 
+            color = "#8AA17D", 
+            alpha = 0.25, 
+            size = 1) +
+   stat_lineribbon(colour = "darkgreen", 
+                  size = 1.5, 
+                  point_interval = "median_hdci", 
+                  fill = "darkgreen", 
+                  .width = 0.001, 
+                  alpha = 1) +
+  scale_y_continuous(name="",
+                     limits = c(0,50),
+                     breaks = seq(0, 50, by = 10)) +
+  theme_classic() +
+  scale_x_continuous(expression(Predator~abundance~(ind.150m^-2))) +
+  theme_classic() +
+  theme(
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.x = element_text(size = 15),
+        axis.text.x = element_text(size = 12),
+        plot.title = element_text(size = 18)) +
+  ggtitle("Scrapers")
+```
+
+# Combine plots
+
+```{r}
+p_predsCOMB <-
+(p_predTH + p_predCROP) /
+(predDET + predSCRA) +
+  plot_annotation(tag_levels = "a") &
+  theme(plot.tag = element_text(size = 15))
+```
+
+# ggsave
+
+```{r}
+ggsave("Figures/p_predsCOMB.jpeg",
+       plot =p_predsCOMB, 
+       dpi = 600, 
+       height = 6.5, 
+       width = 8, 
+       units = "in")
+```

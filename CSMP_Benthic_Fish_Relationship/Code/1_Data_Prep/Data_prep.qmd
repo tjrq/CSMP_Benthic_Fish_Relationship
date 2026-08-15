@@ -4,7 +4,18 @@ format: html
 editor: visual
 ---
 
-# load library
+# Clean up
+
+```{r}
+rm(list=ls())
+gc()
+```
+
+# Description
+
+This quarto documents contains database preparation involving the cleaning and combining of fish and benthic databases. Masterfile files are not provided as other colleagues are working on other aspects of the data
+
+# Load library
 
 ```{r}
 #| label: libraries
@@ -35,22 +46,24 @@ library(ggimage)
 library(iNEXT)
 ```
 
-# read csv
+# Read csv
 
-## benthic file
+## Load benthic csv
 
 ```{r}
 benthic_master <- read_csv("Data/ROV_Relief_Slope_UPDATED.csv",
                            trim_ws = TRUE)
 
-glimpse(benthic_master)
+#glimpse(benthic_master)
 ```
 
-### find site names
+### Find site names
 
--   Site names in the benthic file will dictate what sites to include in the fish file
+Site names in the benthic file will dictate what sites to include in the fish file. This is because I needed to match the benthic and fish surveys. 
 
-declare site as factor
+#### Database preparation (benthic)
+
+##### Declare sites as factors
 
 ```{r}
 benthic_master <- 
@@ -59,7 +72,7 @@ benthic_master <-
          Survey = factor(Survey))
 ```
 
-check levels of site
+##### Check unique names for sites
 
 ```{r}
 benthic_sites <-
@@ -69,7 +82,7 @@ benthic_master |>
   rename(Benthic_site_names = value)
 ```
 
-unique for survey
+##### Check unique names for surveys
 
 ```{r}
 benthic_surveys <-
@@ -79,7 +92,7 @@ benthic_master |>
   rename(Benthic_survey = value)
 ```
 
-## fish file
+## Load fish csv
 
 ```{r}
 fish_master <- read_csv("Data/master_ROV_fish_Tim_2.csv",
@@ -88,7 +101,9 @@ fish_master <- read_csv("Data/master_ROV_fish_Tim_2.csv",
 #glimpse(fish_master)
 ```
 
-declare site as factors
+#### Database preparation (fish)
+
+##### Declare sites as factors
 
 ```{r}
 fish_master <-
@@ -98,7 +113,7 @@ fish_master <-
          Reef_2 = factor(Reef_2))
 ```
 
-### check levels of survey
+##### Unique for surveys
 
 ```{r}
 fish_survey <-
@@ -108,9 +123,11 @@ fish_master |>
   rename(Fish_survey = value)
 ```
 
--   filter survey datas Feb_21, Jul_21, Feb_22
+Filter survey data Feb_21, Jul_21, Feb_22
 
--   filter only these dates as these dates had benthic surveys
+Filter only these dates as these dates had benthic surveys. 
+
+##### Filter survey dates
 
 ```{r}
 fish_master_v2 <- 
@@ -120,7 +137,7 @@ fish_master_v2 <-
            Survey == "Feb_22")
 ```
 
-### check levels of site
+##### Unique for sites
 
 ```{r}
 fish_sites <-
@@ -130,34 +147,11 @@ fish_master_v2 |>
   rename(Fish_site_names = value)
 ```
 
-# check site names manually
+## Benthic database
 
--   problematic sites in benthic_master
-    -   Lihou_N1,
-    -   Lihou_S1,
-    -   Lihou_S2
+## Filter out problematic sites and then rename benthic sites
 
-```{r}
-benthic_master |> 
-  filter(Site == "Edna_3")
-```
-
-names for Lihou
-
-```{r}
-fish_master_v2 |> 
-  filter(Reef_1 == "Lihou") |> 
-  with(unique(Reef_2))
-```
-
-```{r}
-fish_master_v2 |> 
-  filter(Site == "CHIL-01") 
-```
-
-# BENTHIC DATABASE
-
-## filter out problematic sites and then rename the benthic site names
+This was done to match fish database
 
 ```{r}
 benthic_master_v2 <-
@@ -191,15 +185,7 @@ benthic_master_v2 <-
                                 "Feb-22" = "Feb_22"))
 ```
 
-```{r}
-benthic_master_v2 |> 
-  filter(Site_recode == "HERM-01")
-```
-
-
-### check levels of site in benthic database after changing the names
-
--   looks correct
+### Check levels of site in benthic database after changing the names
 
 ```{r}
 benthic_master_v2 |> 
@@ -208,7 +194,9 @@ benthic_master_v2 |>
   arrange(value)
 ```
 
-## create new T_ID and filter relevant columns; make another column for total macroalgae and hard coral
+Looks correct
+
+### Create new T_ID and filter relevant columns; make another column for total macroalgae and hard coral
 
 ```{r}
 benthic_master_v3 <- 
@@ -226,12 +214,123 @@ benthic_master_v2 |>
          total_hard_coral = HC_complex + HC_encrusting + HC_plate + HC_other + HC_massive_submass)
 ```
 
-# FISH DATABASE
-
-## New ID fish and filter only herbivore functional groups
+## Fish database
 
 ```{r}
-fish_master_v3 <-
+fish_master_v3 <- 
+fish_master_v2 |> 
+  filter(Family != "Chanidae" & # remove families mislabelled as herbivores
+           Family != "Ostraciidae" &
+           Family != "Pomacentridae" &
+           Family != "Tetraodontidae") |> 
+  pivot_wider(names_from = Functional.Group, # have functional group as columns so that all transects have values
+              values_from = Number,
+              values_fn = sum) |>  
+  select(Survey, # select relevant columns
+         Site,
+         Transect,
+         Depth_m,
+         Benthic_Complexity,
+         Habitat,
+         `cropper/grazer`,
+         browser,
+         detritivore,
+         excavator,
+         scraper) |> 
+  rename(cropper = `cropper/grazer`) |> 
+  mutate(across(cropper: scraper,
+         ~replace_na(.x, 0))) |> 
+  filter(Site == "BOUG-01" | 
+           Site == "CHIL-01" |
+           Site == "EDNA-01" |
+           Site == "FLIN-02" |
+           Site == "FLIN-01" |
+           Site == "FRED-01" |
+           Site == "HERA-01" |
+           Site == "HSUP-01" |
+           Site == "HOLM-02" |
+           Site == "JULI-01" |
+           Site == "JULI-02" |
+           Site == "HERM-01" |
+           Site == "KENN-01" |
+           Site == "MARI-01" |
+           Site == "OSPR-01" |
+           Site == "SAUM-01" |
+           Site == "WILL-01" |
+           Site == "WREC-01") |> 
+  group_by(Survey,
+           Site,
+           Transect,
+           Depth_m,
+           Benthic_Complexity,
+           Habitat) |> 
+  summarise_at(vars(cropper:scraper),
+               sum)
+```
+
+
+### Create new ID fish and filter only herbivore functional groups
+
+'New ID' will be used to match the two databases
+
+```{r}
+fish_master_abun <-
+  fish_master_v3 |> 
+  mutate(New_ID = factor(paste(Survey,
+                               Site,
+                               Transect,
+                               Depth_m,
+                               sep = "|")))
+```
+
+# Data merging
+
+## Merge fish abundance and benthic cover db
+
+NAs are dropped
+
+```{r}
+fish_benthic_master <- 
+fish_master_abun |> left_join(benthic_master_v3,
+                               by = join_by(New_ID)) |> 
+  drop_na()
+```
+
+### Export csv (fish abundance and benthic cover)
+
+```{r}
+db_fish_benthic <- write.csv(fish_benthic_master, "relationship_fish_ab_ben_version3.csv")
+```
+
+#### Checks: count number of sites
+
+```{r}
+fish_benthic_master |> 
+  group_by(Site) |> 
+  dplyr::summarise(Count = length(Site)) |> 
+  ungroup()
+```
+
+### Export csv (benthic cover)
+
+```{r}
+db_benthic <- write.csv(benthic_master_v3, "db_benthic.csv")
+```
+
+# SPECIES RICHNESS
+
+## all transects
+
+```{r}
+all_transects <- fish_master_v2 |> 
+  mutate(New_ID = factor(paste(Survey, Site, Transect, Depth_m, sep = "|"))) |> 
+  distinct(New_ID, Survey, Site, Transect, Depth_m, Benthic_Complexity, Habitat)
+```
+
+## sprich prep
+
+```{r}
+fish_sprich <-
 fish_master_v2 |> 
   mutate(New_ID = factor(paste(Survey,
                                Site,
@@ -249,204 +348,18 @@ fish_master_v2 |>
            Family != "Tetraodontidae")
 ```
 
-## wide format with functional groups as column names and values as abundance; filter relevant sites
-
-```{r}
-fish_master_abun <- 
-fish_master_v3 |> 
-  pivot_wider(names_from = Functional.Group, 
-              values_from = Number,
-              values_fn = sum) |> 
-  select(New_ID,
-         Site,
-         Transect,
-         Depth_m,
-         Benthic_Complexity,
-         `cropper/grazer`,
-         browser,
-         detritivore,
-         excavator,
-         scraper) |> 
-  rename(cropper = `cropper/grazer`) |> 
-  mutate(across(cropper: scraper,
-         ~replace_na(.x, 0))) |> 
-  filter(Site == "BOUG-01" | 
-           Site == "CHIL-01" |
-           Site == "EDNA-01" |
-           Site == "FLIN-02" |
-           Site == "FLIN-01" |
-           Site == "FRED-01" |
-           Site == "HERA-01" |
-           Site == "HSUP-01" |
-           Site == "HOLM-02" |
-           Site == "JULI-01" |
-           Site == "JULI-02" |
-           Site == "HERM-01" |
-           Site == "KENN-01" |
-           Site == "MARI-01" |
-           Site == "OSPR-01" |
-           Site == "SAUM-01" |
-           Site == "WILL-01" |
-           Site == "WREC-01") |> 
-  group_by(New_ID,
-           Site,
-           Transect,
-           Depth_m,
-           Benthic_Complexity) |> 
-  summarise_at(vars(cropper:scraper),
-               sum)
-```
-
-
-```{r}
-fish_master_abun |>
-  filter(Site == "HERM-01") 
-```
-
-
-# DATA MERGING (benthic and fish abundance)
-
-```{r}
-benthic_fish_master <- 
-benthic_master_v3 |> left_join(fish_master_abun,
-                               by = join_by(New_ID)) |> 
-  drop_na()
-```
-
--   51 transects with NAs
-
-# export csv (benthic_fish_database)
-
-```{r}
-db_benthic_fish <- write.csv(benthic_fish_master, "relationship_ben_fish_ab.csv") # dont use this
-```
-
-# checking
-
-```{r}
-fish_master_abun |> 
-  filter(Site == "HERA-01")
-```
-
-# JOIN ABUNDANCE AND BENTHIC COVER
-
-```{r}
-fish_benthic_master <- 
-fish_master_abun |> left_join(benthic_master_v3,
-                               by = join_by(New_ID)) |> 
-  drop_na()
-```
-
-# export csv (fish_benthic_database)
-
-```{r}
-db_fish_benthic <- write.csv(fish_benthic_master, "relationship_fish_ab_ben_version2.csv") # use this database
-```
-
--   38 NAs
-
-# count number of sites
-
-```{r}
-fish_benthic_master |> 
-  group_by(Site) |> 
-  dplyr::summarise(Count = length(Site)) |> 
-  ungroup()
-```
-
-
-# export csv (benthic cover)
-
-```{r}
-db_benthic <- write.csv(benthic_master_v3, "db_benthic.csv")
-```
-
-## wide format with functional groups as column names and values as biomass; filter relevant sites
-
-```{r}
-fish_master_biom <- 
-fish_master_v3 |> 
-  mutate(Biomass_KG = Biomass_G / 1000) |> 
-  pivot_wider(names_from = Functional.Group, 
-              values_from = Biomass_KG,
-              values_fn = sum) |> 
-  select(New_ID,
-         Site,
-         Transect,
-         Depth_m,
-         Benthic_Complexity,
-         `cropper/grazer`,
-         browser,
-         detritivore,
-         excavator,
-         scraper) |> 
-  rename(cropper = `cropper/grazer`) |> 
-  mutate(across(cropper: scraper,
-         ~replace_na(.x, 0))) |> 
-  filter(Site == "BOUG-01" | 
-           Site == "CHIL-01" |
-           Site == "EDNA-01" |
-           Site == "FLIN-02" |
-           Site == "FLIN-01" |
-           Site == "FRED-01" |
-           Site == "HERA-01" |
-           Site == "HSUP-01" |
-           Site == "HOLM-02" |
-           Site == "JULI-01" |
-           Site == "JULI-02" |
-           Site == "HERM-01" |
-           Site == "KENN-01" |
-           Site == "MARI-01" |
-           Site == "OSPR-01" |
-           Site == "SAUM-01" |
-           Site == "WILL-01" |
-           Site == "WREC-01") |> 
-  group_by(New_ID,
-           Site,
-           Transect,
-           Depth_m,
-           Benthic_Complexity) |> 
-  summarise_at(vars(cropper:scraper),
-               sum)
-```
-
-# JOIN BIOMASS AND BENTHIC COVER
-
-```{r}
-fish_benthic_bio_master <- 
-fish_master_biom |> left_join(benthic_master_v3,
-                               by = join_by(New_ID)) |> 
-  drop_na()
-```
-
-# export csv (fish_benthic_database)
-
-```{r}
-db_fishbio_benthic <- write.csv(fish_benthic_bio_master,
-                                "relationship_fish_bio_ben.csv") # use this database
-```
-
-# count number of sites
-
-```{r}
-
-```
-
-
-# SPECIES RICHNESS
-
-## count number of species
+## Count number of species (species richness calcs)
 
 ```{r}
 sp_count <- 
-  fish_master_v3 |> 
+  fish_sprich |> 
   group_by(New_ID,
            Binomial) |> 
   dplyr::summarise(Count = sum(Number)) |> 
   ungroup()
 ```
 
-## long to wide format
+## Long to wide format
 
 ```{r}
 sp_count_wide <- 
@@ -456,7 +369,7 @@ sp_count |>
               values_fill = 0) 
 ```
 
-## Remove column names cause iNEXT wont run with categorical
+## Remove column names cause iNEXT wont run with categorical variables in the matrix
 
 ```{r}
 sp_count_wide_v2 <-
@@ -464,10 +377,10 @@ sp_count_wide |>
   column_to_rownames("New_ID") |> 
   t() # transpose to make site columns and species rows
 
-View(sp_count_wide_v2)
+#View(sp_count_wide_v2)
 ```
 
-### run iNEXT
+### Run iNEXT
 
 ```{r}
 sprich_inext <- sp_count_wide_v2 |> 
@@ -479,31 +392,66 @@ sprich_inext <- sp_count_wide_v2 |>
 #sprich_inext$AsyEst
 ```
 
-### Separate species richness only
+## Separate species richness estimates only
+
+iNEXT returns other diversity metrics (eg Shannon-Weiner)
 
 ```{r}
 spr_asym <- sprich_inext$AsyEst |> 
   filter(Diversity == "Species richness")
 ```
-### rename Assemblage into New_ID
+
+### Rename Assemblage into New_ID
 
 ```{r}
 spr_asym <-
   spr_asym |> 
   rename(New_ID = Assemblage)
 ```
-## JOIN SP RICH AND BENTHIC COVER
+
+### Add transects that were filtered out because of 0 herbivores
+
+```{r}
+spr_asym_full <-
+  all_transects |>
+  left_join(spr_asym, by = "New_ID") |>
+  mutate(
+    Observed = replace_na(Observed, 0),
+    Estimator = replace_na(Estimator, 0),
+    s.e. = replace_na(s.e., 0),
+    LCL = replace_na(LCL, 0),
+    UCL = replace_na(UCL, 0)
+  )
+```
+
+## Merge species richness and benthic cover
 
 ```{r}
 fish_benthic_sp_master <-
-spr_asym |> left_join(benthic_master_v3,
+spr_asym_full |> left_join(benthic_master_v3,
                                by = join_by(New_ID)) |> 
   drop_na()
 ```
 
-## export csv (fish_benthic_database)
+### Add benthic complexity to the fish abundance and sprich database
+
+```{r}
+fish_master_v3_bc <- 
+  all_transects |> 
+  group_by(New_ID) |> 
+  summarise(
+    median_complexity = median(Benthic_Complexity, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+fish_benthic_sp_master <-
+  fish_benthic_sp_master |> 
+  left_join(fish_master_v3_bc, by = "New_ID")
+```
+
+### Export csv (fish richness and benthic cover)
 
 ```{r}
 db_fishsp_benthic <- write.csv(fish_benthic_sp_master,
-                                "relationship_fish_sp_ben.csv") # use this database
+                                "relationship_fish_sp_ben_v2.csv") # use this database
 ```

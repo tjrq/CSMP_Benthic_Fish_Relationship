@@ -1,0 +1,371 @@
+---
+title: "BC_Fish_Spr_Fits"
+format: html
+editor: visual
+---
+
+# Overall description
+
+This qmd file contains R code for the model fitting and validation of the relationship between species richness of herbivorous fishes and benthic categories
+
+# Clean up
+
+```{r}
+rm(list=ls())
+gc()
+```
+
+# Library
+
+```{r}
+#| label: libraries
+#| output: false
+#| eval: true
+#| warning: false
+#| message: false
+#| cache: false
+
+library(car)
+library(tidyverse)
+library(rstanarm)
+library(brms)
+library(coda)
+library(bayesplot)
+library(DHARMa)
+library(emmeans)
+library(broom)
+library(tidybayes)
+library(ggeffects)
+library(broom.mixed)
+library(bayestestR)
+library(see)
+library(easystats)
+library(patchwork)
+library(ggridges)
+source("helperFunctions.R")
+library(ggimage)
+library(iNEXT)
+```
+
+# Load csv
+
+```{r}
+sprich <- read_csv("Data/relationship_fish_sp_ben_v2.csv",
+                           trim_ws = TRUE)
+```
+
+# Isolate important variables
+
+```{r}
+sprich_v2 <- 
+  sprich |> 
+  mutate(total_octocoral = complex_octocoral + other_octocoral) |> 
+  select(Depth,
+         Habitat,
+         #Aspect_descriptive,
+         Site_recode,
+         Estimator,
+         turf_algae,
+         sponge,
+         unconsolidated_subs,
+         total_macroalgae,
+         total_hard_coral,
+         total_octocoral,
+         median_complexity) |> 
+  mutate(median_complexity = factor(median_complexity)) |> 
+  filter(Habitat == "outer_reef")
+```
+
+# Exploratory data analysis
+
+```{r}
+sprich_v2 |> 
+  ggplot(aes(x = turf_algae, y = Estimator)) +
+  geom_point()
+
+sprich_v2 |> 
+  ggplot(aes(x = macroalgae, y = Estimator)) +
+  geom_point()
+
+sprich_v2 |> 
+  ggplot(aes(x = total_hard_coral, y = Estimator)) +
+  geom_point()
+```
+
+# Description
+
+Below this line are codes to examine the relationship between species richness of herbivorous fishes and benthic categories
+
+# TOTAL HERBIVORES
+
+# HABITAT MODEL
+
+## Def formula
+
+```{r}
+herbs_form_sp_hab <- bf(Estimator ~ 
+                  #turf_algae +
+                   #sponge +
+                     unconsolidated_subs +
+                     #total_macroalgae +
+                     total_hard_coral +
+                     total_octocoral +
+                     median_complexity +
+                   (1 | Site_recode), #+
+                     #(1 | Habitat_type) +
+                     #(1 | Aspect_descriptive),
+                 family = lognormal())
+```
+
+## Weakly informed priors
+
+```{r}
+herb_sp_priors <- prior(normal(1.1, 1.2), class = "Intercept") +
+  prior(normal(0, 1), class = "b") +
+  prior(student_t(3, 0, 1.2), class = "sigma") +
+  prior(student_t(3, 0, 1.2), class = "sd") # +
+  #prior(beta(1, 1), class = "hu")
+```
+
+## Prior only model
+
+```{r}
+#| cache: true
+herbs_sp_prior_hab_mod <- brm(herbs_form_sp_hab,
+                    data = sprich_v2,
+                    prior = herb_sp_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 2000)
+```
+
+## Fit the model
+
+```{r}
+#| cache: true
+herbs_sp_hab_mod <- update(herbs_sp_prior_hab_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    save_pars = save_pars(all = TRUE), # required for loo_comparison
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+herbs_sp_hab_mod|> mcmc_plot(type = "trace")
+# autocorr
+herbs_sp_hab_mod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+herbs_sp_hab_mod|> mcmc_plot(type = "rhat_hist")
+
+# ess
+herbs_sp_hab_mod |> mcmc_plot(type = "neff_hist")
+```
+
+## Residuals
+
+```{r}
+herbs_sp_hab_resids <- make_brms_dharma_res(herbs_sp_hab_mod)
+
+# qqplot
+herbs_sp_hab_resids |> testUniformity()
+
+# residplot
+herbs_sp_hab_resids |> plotResiduals(quantreg = FALSE)
+
+# testdisp
+herbs_sp_hab_resids |> testDispersion()
+```
+
+# Save model
+
+```{r}
+save(herbs_sp_hab_mod, file = "Model_Outputs/herbs_sp_hab_mod_ver2.Rdata")
+```
+
+# FOOD MODEL
+
+## Def formula
+
+```{r}
+herbs_form_sp_food <- bf(Estimator ~ 
+                  turf_algae +
+                   sponge +
+                    # unconsolidated_subs +
+                     total_macroalgae +
+                     #total_hard_coral +
+                     #total_octocoral +
+                     #median_complexity +
+                   (1 | Site_recode),# +
+                     #(1 | Habitat_type) +
+                     #(1 | Aspect_descriptive),
+                 family = lognormal())
+```
+
+## Prior only model
+
+```{r}
+#| cache: true
+herbs_sp_prior_food_mod <- brm(herbs_form_sp_food,
+                    data = sprich_v2,
+                    prior = herb_sp_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 2000)
+```
+
+## Fit the model
+
+```{r}
+#| cache: true
+herbs_sp_food_mod <- update(herbs_sp_prior_food_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    save_pars = save_pars(all = TRUE), # required for loo_comparison
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+herbs_sp_food_mod|> mcmc_plot(type = "trace")
+# autocorr
+herbs_sp_food_mod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+herbs_sp_food_mod|> mcmc_plot(type = "rhat_hist")
+
+# ess
+herbs_sp_food_mod |> mcmc_plot(type = "neff_hist")
+```
+
+## Residuals
+
+```{r}
+herbs_sp_food_resids <- make_brms_dharma_res(herbs_sp_food_mod)
+
+# qqplot
+herbs_sp_food_resids |> testUniformity()
+
+# residplot
+herbs_sp_food_resids |> plotResiduals(quantreg = FALSE)
+
+# testdisp
+herbs_sp_food_resids |> testDispersion()
+```
+
+# Save model
+
+```{r}
+save(herbs_sp_food_mod, file = "Model_Outputs/herbs_sp_food_mod_ver2.Rdata")
+```
+
+# ==========================
+
+# Description
+
+Below this line are code for modelling and validating changes in species richness with depth
+
+## Def formula
+
+```{r}
+herbs_form_fishsp <- bf(Estimator ~ 
+                  Depth  +
+                   (1 | Site_recode), #+
+                     #(1 | Habitat_type) +
+                     #(1 | Aspect_descriptive),
+                 family = lognormal())
+```
+
+## Weakly informed priors
+
+```{r}
+herb_fishsp_priors <- prior(normal(1.1, 1.2), class = "Intercept") +
+  prior(normal(0, 1), class = "b") +
+  prior(student_t(3, 0, 1.2), class = "sigma") +
+  prior(student_t(3, 0, 1.2), class = "sd")
+```
+
+## Prior only model
+
+```{r}
+#| cache: true
+herbs_fishsp_prior_mod <- brm(herbs_form_fishsp,
+                    data = sprich_v2,
+                    prior = herb_fishsp_priors,
+                    sample_prior = "only",
+                    iter = 5000,
+                    warmup = 1000,
+                    chains = 3,
+                    cores = 6,
+                    thin = 5,
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 20),
+                    refresh = 2000)
+```
+
+## Fit the model
+
+```{r}
+#| cache: true
+herbs_fishsp_mod <- update(herbs_fishsp_prior_mod,
+                  sample_prior = "yes",
+                    iter = 10000,
+                    warmup = 2000,
+                    save_pars = save_pars(all = TRUE), # required for loo_comparison
+                    refresh = 2000)
+```
+
+## MCMC diagnostics
+
+```{r}
+# trace
+herbs_fishsp_mod|> mcmc_plot(type = "trace")
+# autocorr
+herbs_fishsp_mod |> mcmc_plot(type = "acf_bar")
+
+# rhat
+herbs_fishsp_mod|> mcmc_plot(type = "rhat_hist")
+
+# ess
+herbs_fishsp_mod |> mcmc_plot(type = "neff_hist")
+```
+
+## Residuals
+
+```{r}
+herbs_fishsp_resids <- make_brms_dharma_res(herbs_fishsp_mod)
+
+# qqplot
+herbs_fishsp_resids |> testUniformity()
+
+# residplot
+herbs_fishsp_resids |> plotResiduals(quantreg = FALSE)
+
+# testdisp
+herbs_fishsp_resids |> testDispersion()
+```
+
+# Save model
+
+```{r}
+save(herbs_fishsp_mod, file = "Model_Outputs/herbs_fishspecies_depth_mod_ver2.Rdata")
+```
