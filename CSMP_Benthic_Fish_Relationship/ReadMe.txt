@@ -1,8 +1,3 @@
-This folder contains data and R code for data chapter 3 of Timothy Quimpo's thesis. 
+This folder contains data and R code for data chapter 3 of Timothy Quimpo's thesis and has been recently (Aug 2026) submitted for consideration in a journal. 
 
-Data files called:
-.Rproj.user, .Rdata, and .Rhistory are configuration files that can be ignored.
-
-Code and data are enclosed in the folder called "Code".
-
-In "Code", there are several separate folders partitioned according to the statistical analyses conducted. There are ReadMe files in each folder detailing what was done, with supplementary information in each R code.
+Data herein examined changes in the species richness and abundance of herbivorous fishes and of benthic assemblages, and how this varied across a depth range of 7 to 98m in the Coral Sea Marine Park. The relationships between herbivorous fish abundance and richness with benthic cover was also investigated, together with relationship of herbivore assemblages with predator abundance and benthic complexity.
